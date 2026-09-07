@@ -42,9 +42,15 @@ The repository uses xUnit v3 through Microsoft Testing Platform, selected in `gl
 
 `OutlookAligner.App` is intentionally a compile-only project shell in Phase 0. It references the selected Windows App SDK, CommunityToolkit, WebView2, hosting, and logging packages, but no XAML/application behavior is implemented. Production WinUI activation belongs to the read-only UI phase after the Outlook/identity spikes.
 
+### TypeScript 7 and ESLint
+
+TypeScript 7.0.2 is retained because it is the selected current stable compiler. The latest stable `typescript-eslint` available during bootstrap only declares TypeScript support below 6.1 and therefore cannot be installed without forcing an unsupported peer dependency.
+
+Phase 0 does not use `--force` or `--legacy-peer-deps`. TypeScript source is gated by strict `tsc --noEmit`; ESLint 10 gates the JavaScript configuration layer. The first future PR after a stable TypeScript-7-compatible ESLint parser becomes available should restore TypeScript-aware ESLint rules.
+
 ### Frontend lockfile
 
-Direct npm dependencies are pinned to exact stable versions. A `package-lock.json` has intentionally not been fabricated because the current execution environment cannot resolve npm packages to generate a trustworthy lockfile. Bootstrap CI therefore uses `npm install` rather than `npm ci`.
+Direct npm dependencies are pinned to exact stable versions. A `package-lock.json` has intentionally not been fabricated because the execution environment used to author Phase 0 could not resolve npm packages to generate a trustworthy lockfile. Bootstrap CI therefore uses `npm install` rather than `npm ci`.
 
 The first pull request that materially touches `web/calendar` must generate and commit a real npm lockfile using Node 24, then change CI and `scripts/verify.ps1` to `npm ci`. Until then, top-level package versions are exact but transitive npm versions are not fully frozen.
 
@@ -81,8 +87,8 @@ Every push to `main` and every future pull request must pass:
 6. Benchmark project compilation.
 7. NuGet vulnerability audit.
 8. Frontend dependency install.
-9. TypeScript typecheck.
-10. ESLint.
+9. TypeScript strict typecheck.
+10. ESLint for supported JavaScript sources; TypeScript-aware ESLint is temporarily deferred because the stable parser does not yet support TypeScript 7.
 11. Prettier check.
 12. Vite production build.
 13. Production npm vulnerability audit.

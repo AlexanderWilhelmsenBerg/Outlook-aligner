@@ -1,8 +1,10 @@
-import tseslint from "typescript-eslint";
-
-export default tseslint.config(
+export default [
   {
-    ignores: ["dist/"],
+    files: ["**/*.js"],
+    ignores: ["dist/", "node_modules/"],
+    rules: {
+      "no-undef": "error",
+      "no-unused-vars": "error",
+    },
   },
-  ...tseslint.configs.recommended,
-);
+];
