@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   dotnet:
-    name: .NET build and test
+    name: .NET build, test and Phase 1 probe
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -30,6 +30,26 @@ jobs:
         run: dotnet build benchmarks/OutlookAligner.Benchmarks/OutlookAligner.Benchmarks.csproj -c Release --no-restore
       - name: Audit NuGet dependencies
         run: dotnet list OutlookAligner.sln package --vulnerable --include-transitive
+      - name: Publish Phase 1 Outlook probe
+        run: >-
+          dotnet publish src/OutlookAligner.OutlookHost/OutlookAligner.OutlookHost.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=false
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          --output artifacts/phase1-probe
+      - name: Smoke test published executable
+        run: .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --help
+      - name: Upload Phase 1 Outlook probe
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: OutlookAligner-Phase1-Probe-win-x64
+          path: artifacts/phase1-probe/OutlookAligner.OutlookHost.exe
+          if-no-files-found: error
+          retention-days: 14
 
   frontend:
     name: Calendar frontend

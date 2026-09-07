@@ -9,11 +9,25 @@ The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL 
 ## Project status
 
 - **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
-- **Phase 1 — Outlook COM discovery/read probe: Next / PR-only**
+- **Phase 1 — Outlook COM discovery/read probe: In progress 🚧 (PR-only)**
 
 Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
 
 The Phase 0 implementation baseline passed hosted CI on 2026-09-07 and every direct dependency was reverified against the latest stable release. See [`docs/phase-0.md`](docs/phase-0.md) for the version matrix and verification checkmarks.
+
+## Phase 1 test executable
+
+Phase 1 CI publishes a self-contained Windows x64 diagnostic executable as the Actions artifact:
+
+`OutlookAligner-Phase1-Probe-win-x64`
+
+After downloading/extracting it on the Windows PC with Classic Outlook configured, run:
+
+```powershell
+.\OutlookAligner.OutlookHost.exe --days 90
+```
+
+The probe is read-only and withholds event subjects/locations by default. See [`docs/phase-1.md`](docs/phase-1.md) for download instructions, CLI options, and the manual acceptance checklist.
 
 ## Verified toolchain baseline
 
@@ -41,9 +55,10 @@ Run:
 ./scripts/verify.ps1
 ```
 
-Classic Outlook is not required for the Phase 0 build/test baseline. It is required for the Phase 1 manual COM probe.
+Classic Outlook is required only for the Phase 1 manual COM integration probe, not for normal hosted build/unit-test gates.
 
 ## Documentation
 
 - [`plan.md`](plan.md) — product, architecture, safety rules, phases, and acceptance criteria.
 - [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
+- [`docs/phase-1.md`](docs/phase-1.md) — read-only Outlook probe design and test procedure.
