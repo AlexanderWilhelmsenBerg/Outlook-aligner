@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using OutlookAligner.Outlook.Contracts;
 using OutlookAligner.OutlookHost.Com;
@@ -28,7 +29,10 @@ internal static class OutlookCalendarReader
             items.Sort("[Start]");
             items.IncludeRecurrences = true;
 
-            var restriction = OutlookDateFilter.Build(windowStartLocal, windowEndLocal);
+            var restriction = OutlookDateFilter.Build(
+                windowStartLocal,
+                windowEndLocal,
+                CultureInfo.CurrentCulture);
             restrictedItems = items.Restrict(restriction);
 
             current = restrictedItems.GetFirst();

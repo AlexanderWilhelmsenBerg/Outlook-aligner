@@ -198,7 +198,7 @@ internal static class OutlookProbeRunner
             Events: [],
             Error: error);
 
-    private static string? ReadSmtpAddress(OutlookInterop.Account account, ICollection<string> warnings)
+    private static string? ReadSmtpAddress(OutlookInterop.Account account, List<string> warnings)
     {
         try
         {
