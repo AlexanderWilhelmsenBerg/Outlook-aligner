@@ -8,28 +8,31 @@ The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL 
 
 ## Project status
 
-Phase 0 bootstraps the repository and toolchain. Outlook COM behavior begins in Phase 1.
+- **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
+- **Phase 1 — Outlook COM discovery/read probe: Next / PR-only**
 
-After Phase 0, all implementation changes are delivered through pull requests rather than directly to `main`.
+Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
 
-## Toolchain
+The Phase 0 implementation baseline passed hosted CI on 2026-09-07 and every direct dependency was reverified against the latest stable release. See [`docs/phase-0.md`](docs/phase-0.md) for the version matrix and verification checkmarks.
 
-- .NET SDK 10.0.400 / C# 14
-- Windows App SDK / WinUI 3 dependencies
-- Node.js 24 LTS
-- TypeScript + Vite + FullCalendar
-- xUnit v3 on Microsoft Testing Platform
-- BenchmarkDotNet
+## Verified toolchain baseline
+
+- .NET SDK 10.0.400 / .NET 10.0.11 / C# 14
+- Windows App SDK 2.4.0 / WinUI 3
+- WebView2 1.0.4191.47
+- Outlook Interop 15.0.4797.1004
+- Node.js 24.20.0 LTS / npm 11.19.0
+- TypeScript 7.0.2 / Vite 8.2.2 / FullCalendar 7.1.0
+- xUnit v3 4.0.0 on Microsoft Testing Platform with CodeCoverage 18.11.0
+- BenchmarkDotNet 0.15.8
 - GitHub Actions + Dependabot
-
-See [`plan.md`](plan.md) for the product/architecture roadmap and [`docs/phase-0.md`](docs/phase-0.md) for bootstrap details.
 
 ## Local verification
 
 Prerequisites:
 
 - .NET SDK 10.0.400
-- Node.js 24 or newer in the Node 24 LTS line
+- Node.js 24 LTS
 - PowerShell 7 recommended
 
 Run:
@@ -38,4 +41,9 @@ Run:
 ./scripts/verify.ps1
 ```
 
-Classic Outlook is not needed for Phase 0 build/tests. It becomes necessary for the Phase 1 manual COM integration probe.
+Classic Outlook is not required for the Phase 0 build/test baseline. It is required for the Phase 1 manual COM probe.
+
+## Documentation
+
+- [`plan.md`](plan.md) — product, architecture, safety rules, phases, and acceptance criteria.
+- [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
