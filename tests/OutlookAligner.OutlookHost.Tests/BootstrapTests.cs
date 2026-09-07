@@ -1,6 +1,7 @@
 using System.Globalization;
 using OutlookAligner.Outlook.Contracts;
 using OutlookAligner.OutlookHost.Calendars;
+using OutlookAligner.OutlookHost.Com;
 using OutlookAligner.OutlookHost.Probe;
 using Xunit;
 
@@ -25,6 +26,14 @@ public sealed class BootstrapTests
                 reference.Name,
                 "Microsoft.Office.Interop.Outlook",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void InteropDependencyCheckResolvesMetadataWithoutOpeningOutlook()
+    {
+        var result = InteropDependencyCheck.Run();
+
+        Assert.Equal("Outlook interop metadata resolved successfully.", result);
     }
 
     [Fact]
