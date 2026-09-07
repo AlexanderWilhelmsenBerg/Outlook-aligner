@@ -13,6 +13,8 @@ public static class Program
 
 public class BootstrapBenchmark
 {
+    private int _value;
+
     [Benchmark]
-    public Guid CreateGuid() => Guid.NewGuid();
+    public int Increment() => ++_value;
 }
