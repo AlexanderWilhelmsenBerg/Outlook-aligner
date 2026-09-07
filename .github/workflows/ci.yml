@@ -42,7 +42,9 @@ jobs:
           -p:DebugSymbols=false
           --output artifacts/phase1-probe
       - name: Smoke test published executable
-        run: .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --help
+        run: |
+          .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --help
+          .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --interop-check
       - name: Upload Phase 1 Outlook probe
         uses: actions/upload-artifact@v7.0.1
         with:
