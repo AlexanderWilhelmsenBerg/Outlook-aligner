@@ -1,8 +1,10 @@
 # Phase 1 — Outlook COM Discovery / Read Probe
 
-Status: **In progress 🚧 — pull request only**
+Status: **In progress 🚧 — pull request only; hosted CI complete ✅; manual Outlook merge gate pending**
 
 Started: 2026-09-07
+
+Hosted CI verified: 2026-09-07, run `34112886367`, commit `135d192a52201ba789277425c8e4395e1b343874`
 
 ## Purpose
 
@@ -46,6 +48,13 @@ The artifact contains:
 Failed upstream CI gates correctly prevent artifact publication.
 
 The workflow uses `actions/upload-artifact@v7.0.1`, verified as the latest stable upload-artifact action on 2026-09-07.
+
+Verified artifact from CI run `34112886367`:
+
+- artifact ID: `10015120125`;
+- size: `39,802,698` bytes;
+- SHA-256: `c6d0c8ab47d092c025839f5f012ea0870b3600062818b44cd53c3e53a70ada76`;
+- retention expiry: 2026-09-21.
 
 ## Download and run
 
@@ -132,14 +141,16 @@ Run these on the Windows PC with the real three-account Classic Outlook profile:
 
 ## Hosted CI acceptance
 
-- [ ] formatter/analyzer gate passes;
-- [ ] Release solution build passes;
-- [ ] xUnit/MTP tests and coverage pass;
-- [ ] benchmark project compiles;
-- [ ] NuGet/npm audits pass;
-- [ ] self-contained `win-x64` publish succeeds;
-- [ ] published executable passes a `--help` smoke test on the hosted Windows runner;
-- [ ] executable artifact is uploaded successfully.
+Run `34112886367` on commit `135d192a52201ba789277425c8e4395e1b343874` completed all hosted gates successfully:
+
+- [x] formatter/analyzer gate passes;
+- [x] Release solution build passes;
+- [x] xUnit/MTP tests and coverage pass;
+- [x] benchmark project compiles;
+- [x] NuGet/npm audits pass;
+- [x] self-contained `win-x64` publish succeeds;
+- [x] published executable passes a `--help` smoke test on the hosted Windows runner;
+- [x] executable artifact is uploaded successfully.
 
 Hosted tests cover CLI horizon bounds/errors, half-open filter semantics, `en-US` and `nb-NO` filter formatting, defensive JSON redaction, explicit detail output, and a Contracts-layer architecture guard against Outlook interop references.
 
