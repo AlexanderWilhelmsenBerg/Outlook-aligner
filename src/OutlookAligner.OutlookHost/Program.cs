@@ -37,7 +37,7 @@ internal static class Program
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"Outlook probe failed: {exception.GetType().Name}: {exception.Message}");
+            Console.Error.WriteLine($"Outlook probe failed: {exception.GetType().Name}.");
             return 4;
         }
     }

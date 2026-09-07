@@ -18,7 +18,7 @@ internal static class OutlookDateFilter
 
         var start = Escape(startLocal.ToString("g", culture));
         var end = Escape(endLocal.ToString("g", culture));
-        return $"[End] >= '{start}' AND [Start] < '{end}'";
+        return $"[End] > '{start}' AND [Start] < '{end}'";
     }
 
     private static string Escape(string value)

@@ -80,7 +80,7 @@ internal static class OutlookProbeRunner
                         continue;
                     }
 
-                    var liveAccount = account!;
+                    var liveAccount = (Outlook.Account)account;
                     var displayName = liveAccount.DisplayName;
                     var smtpAddress = ReadSmtpAddress(liveAccount, warnings);
                     var accountType = liveAccount.AccountType.ToString();
@@ -117,7 +117,7 @@ internal static class OutlookProbeRunner
                             continue;
                         }
 
-                        var liveCalendar = calendar!;
+                        var liveCalendar = (Outlook.MAPIFolder)calendar;
                         var events = OutlookCalendarReader.Read(
                             liveCalendar,
                             windowStartLocal,
@@ -145,7 +145,7 @@ internal static class OutlookProbeRunner
                             accountType,
                             storeDisplayName,
                             storeId,
-                            $"Default calendar unavailable (HRESULT 0x{exception.ErrorCode:X8})."));
+                            $"Calendar access/read failed (HRESULT 0x{exception.ErrorCode:X8})."));
                     }
                 }
                 catch (COMException exception)

@@ -5,6 +5,11 @@ namespace OutlookAligner.OutlookHost.Probe;
 
 internal static class ProbeOutput
 {
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new()
+    {
+        WriteIndented = true,
+    };
+
     internal static void Write(OutlookProbeResult result, ProbeOptions options)
     {
         ArgumentNullException.ThrowIfNull(result);
@@ -12,9 +17,7 @@ internal static class ProbeOutput
 
         if (options.Json)
         {
-            Console.WriteLine(JsonSerializer.Serialize(
-                result,
-                new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine(SerializeJson(result, options.IncludeDetails));
             return;
         }
 
@@ -44,9 +47,7 @@ internal static class ProbeOutput
             {
                 foreach (var calendarEvent in account.Events)
                 {
-                    Console.WriteLine(
-                        $"    {calendarEvent.StartLocal:g} -> {calendarEvent.EndLocal:g} | "
-                        + $"{calendarEvent.Subject ?? "(no subject)"}");
+                    Console.WriteLine(FormatEventDetails(calendarEvent));
                 }
             }
 
@@ -68,6 +69,23 @@ internal static class ProbeOutput
         }
     }
 
+    internal static string SerializeJson(OutlookProbeResult result, bool includeDetails)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var output = includeDetails ? result : RedactDetails(result);
+        return JsonSerializer.Serialize(output, IndentedJsonOptions);
+    }
+
+    internal static string FormatEventDetails(CalendarEventDto calendarEvent)
+    {
+        ArgumentNullException.ThrowIfNull(calendarEvent);
+
+        return $"    {calendarEvent.StartLocal:g} -> {calendarEvent.EndLocal:g} | "
+            + $"{calendarEvent.Subject ?? "(no subject)"} | "
+            + $"Location: {calendarEvent.Location ?? "(no location)"}";
+    }
+
     internal static void WriteUsage()
     {
         Console.WriteLine("Usage: OutlookAligner.OutlookHost.exe [--days N] [--json] [--include-details]");
@@ -79,4 +97,21 @@ internal static class ProbeOutput
         Console.WriteLine();
         Console.WriteLine("Phase 1 is read-only: the probe does not save, send, forward, move, or delete Outlook items.");
     }
+
+    private static OutlookProbeResult RedactDetails(OutlookProbeResult result)
+        => result with
+        {
+            Accounts = result.Accounts
+                .Select(account => account with
+                {
+                    Events = account.Events
+                        .Select(calendarEvent => calendarEvent with
+                        {
+                            Subject = null,
+                            Location = null,
+                        })
+                        .ToArray(),
+                })
+                .ToArray(),
+        };
 }
