@@ -2,7 +2,10 @@ import { Calendar } from "fullcalendar";
 import dayGridPlugin from "fullcalendar/daygrid";
 import listPlugin from "fullcalendar/list";
 import timeGridPlugin from "fullcalendar/timegrid";
+import classicThemePlugin from "fullcalendar/themes/classic";
 import "fullcalendar/skeleton.css";
+import "fullcalendar/themes/classic/theme.css";
+import "fullcalendar/themes/classic/palette.css";
 import "./styles.css";
 
 const calendarElement = document.querySelector<HTMLDivElement>("#calendar");
@@ -12,7 +15,7 @@ if (!calendarElement) {
 }
 
 const calendar = new Calendar(calendarElement, {
-  plugins: [dayGridPlugin, timeGridPlugin, listPlugin],
+  plugins: [classicThemePlugin, dayGridPlugin, timeGridPlugin, listPlugin],
   initialView: "dayGridMonth",
   height: "100%",
   headerToolbar: false,
