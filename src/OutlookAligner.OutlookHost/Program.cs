@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using OutlookAligner.OutlookHost.Com;
 using OutlookAligner.OutlookHost.Probe;
 
 namespace OutlookAligner.OutlookHost;
@@ -8,6 +9,26 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Length == 1
+            && string.Equals(args[0], "--interop-check", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                Console.WriteLine(InteropDependencyCheck.Run());
+                return 0;
+            }
+            catch (FileNotFoundException exception)
+            {
+                WriteMissingDependency(exception);
+                return 4;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"Outlook interop check failed: {exception.GetType().Name}.");
+                return 4;
+            }
+        }
+
         if (!ProbeOptions.TryParse(args, out var options, out var error))
         {
             Console.Error.WriteLine(error);
@@ -28,6 +49,11 @@ internal static class Program
             ProbeOutput.Write(result, options);
             return 0;
         }
+        catch (FileNotFoundException exception)
+        {
+            WriteMissingDependency(exception);
+            return 4;
+        }
         catch (COMException exception)
         {
             Console.Error.WriteLine(
@@ -40,5 +66,14 @@ internal static class Program
             Console.Error.WriteLine($"Outlook probe failed: {exception.GetType().Name}.");
             return 4;
         }
+    }
+
+    private static void WriteMissingDependency(FileNotFoundException exception)
+    {
+        var missingDependency = string.IsNullOrWhiteSpace(exception.FileName)
+            ? "(unknown assembly)"
+            : Path.GetFileName(exception.FileName);
+
+        Console.Error.WriteLine($"Outlook probe dependency missing: {missingDependency}.");
     }
 }
