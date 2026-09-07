@@ -1,14 +1,14 @@
 using System.Runtime.InteropServices;
 using OutlookAligner.Outlook.Contracts;
 using OutlookAligner.OutlookHost.Com;
-using Outlook = Microsoft.Office.Interop.Outlook;
+using OutlookInterop = Microsoft.Office.Interop.Outlook;
 
 namespace OutlookAligner.OutlookHost.Calendars;
 
 internal static class OutlookCalendarReader
 {
     internal static IReadOnlyList<CalendarEventDto> Read(
-        Outlook.MAPIFolder calendar,
+        OutlookInterop.MAPIFolder calendar,
         DateTime windowStartLocal,
         DateTime windowEndLocal,
         bool includeDetails,
@@ -17,8 +17,8 @@ internal static class OutlookCalendarReader
         ArgumentNullException.ThrowIfNull(calendar);
         ArgumentNullException.ThrowIfNull(warnings);
 
-        Outlook.Items? items = null;
-        Outlook.Items? restrictedItems = null;
+        OutlookInterop.Items? items = null;
+        OutlookInterop.Items? restrictedItems = null;
         object? current = null;
         var events = new List<CalendarEventDto>();
 
@@ -37,7 +37,7 @@ internal static class OutlookCalendarReader
                 object? next = null;
                 try
                 {
-                    if (current is Outlook.AppointmentItem appointment)
+                    if (current is OutlookInterop.AppointmentItem appointment)
                     {
                         try
                         {
@@ -68,7 +68,7 @@ internal static class OutlookCalendarReader
         return events;
     }
 
-    private static CalendarEventDto ToDto(Outlook.AppointmentItem appointment, bool includeDetails)
+    private static CalendarEventDto ToDto(OutlookInterop.AppointmentItem appointment, bool includeDetails)
         => new(
             appointment.EntryID,
             appointment.GlobalAppointmentID,

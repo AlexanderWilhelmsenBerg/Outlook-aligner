@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using OutlookAligner.Outlook.Contracts;
 using OutlookAligner.OutlookHost.Calendars;
 using OutlookAligner.OutlookHost.Com;
-using Outlook = Microsoft.Office.Interop.Outlook;
+using OutlookInterop = Microsoft.Office.Interop.Outlook;
 
 namespace OutlookAligner.OutlookHost.Probe;
 
@@ -18,14 +18,14 @@ internal static class OutlookProbeRunner
         var stores = new List<OutlookStoreDto>();
         var accounts = new List<OutlookAccountDto>();
 
-        Outlook.Application? application = null;
-        Outlook.NameSpace? session = null;
-        Outlook.Stores? outlookStores = null;
-        Outlook.Accounts? outlookAccounts = null;
+        OutlookInterop.Application? application = null;
+        OutlookInterop.NameSpace? session = null;
+        OutlookInterop.Stores? outlookStores = null;
+        OutlookInterop.Accounts? outlookAccounts = null;
 
         try
         {
-            application = new Outlook.Application();
+            application = new OutlookInterop.Application();
             session = application.GetNamespace("MAPI");
 
             string? profileName;
@@ -42,7 +42,7 @@ internal static class OutlookProbeRunner
             outlookStores = session.Stores;
             for (var index = 1; index <= outlookStores.Count; index++)
             {
-                Outlook.Store? store = null;
+                OutlookInterop.Store? store = null;
                 try
                 {
                     store = outlookStores[index];
@@ -67,9 +67,9 @@ internal static class OutlookProbeRunner
             outlookAccounts = session.Accounts;
             for (var index = 1; index <= outlookAccounts.Count; index++)
             {
-                Outlook.Account? account = null;
-                Outlook.Store? deliveryStore = null;
-                Outlook.MAPIFolder? calendar = null;
+                OutlookInterop.Account? account = null;
+                OutlookInterop.Store? deliveryStore = null;
+                OutlookInterop.MAPIFolder? calendar = null;
 
                 try
                 {
@@ -80,7 +80,7 @@ internal static class OutlookProbeRunner
                         continue;
                     }
 
-                    var liveAccount = (Outlook.Account)account;
+                    var liveAccount = (OutlookInterop.Account)account;
                     var displayName = liveAccount.DisplayName;
                     var smtpAddress = ReadSmtpAddress(liveAccount, warnings);
                     var accountType = liveAccount.AccountType.ToString();
@@ -104,7 +104,7 @@ internal static class OutlookProbeRunner
 
                         storeDisplayName = deliveryStore.DisplayName;
                         storeId = deliveryStore.StoreID;
-                        calendar = deliveryStore.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderCalendar);
+                        calendar = deliveryStore.GetDefaultFolder(OutlookInterop.OlDefaultFolders.olFolderCalendar);
                         if (calendar is null)
                         {
                             accounts.Add(UnavailableAccount(
@@ -117,7 +117,7 @@ internal static class OutlookProbeRunner
                             continue;
                         }
 
-                        var liveCalendar = (Outlook.MAPIFolder)calendar;
+                        var liveCalendar = (OutlookInterop.MAPIFolder)calendar;
                         var events = OutlookCalendarReader.Read(
                             liveCalendar,
                             windowStartLocal,
@@ -198,7 +198,7 @@ internal static class OutlookProbeRunner
             Events: [],
             Error: error);
 
-    private static string? ReadSmtpAddress(Outlook.Account account, ICollection<string> warnings)
+    private static string? ReadSmtpAddress(OutlookInterop.Account account, ICollection<string> warnings)
     {
         try
         {
