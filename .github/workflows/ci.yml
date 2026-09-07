@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet:
+    name: .NET build and test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.400
+      - name: Restore
+        run: dotnet restore OutlookAligner.sln
+      - name: Verify formatting
+        run: dotnet format OutlookAligner.sln --verify-no-changes --no-restore
+      - name: Build
+        run: dotnet build OutlookAligner.sln -c Release --no-restore
+      - name: Test with coverage
+        run: dotnet test OutlookAligner.sln -c Release --no-build --no-restore --coverage --coverage-output-format cobertura
+      - name: Build benchmark project
+        run: dotnet build benchmarks/OutlookAligner.Benchmarks/OutlookAligner.Benchmarks.csproj -c Release --no-restore
+      - name: Audit NuGet dependencies
+        run: dotnet list OutlookAligner.sln package --vulnerable --include-transitive
+
+  frontend:
+    name: Calendar frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/calendar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Verify formatting
+        run: npm run format:check
+      - name: Build
+        run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

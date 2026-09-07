@@ -1,0 +1,24 @@
+# Visual Studio / .NET
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+TestResults/
+BenchmarkDotNet.Artifacts/
+
+# Node / frontend
+web/calendar/node_modules/
+web/calendar/dist/
+
+# Local application data
+*.db
+*.db-shm
+*.db-wal
+logs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
