@@ -14,8 +14,8 @@ jobs:
     name: .NET build and test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: 10.0.400
       - name: Restore
@@ -38,8 +38,8 @@ jobs:
       run:
         working-directory: web/calendar
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
         with:
           node-version: "24"
       - name: Install dependencies
