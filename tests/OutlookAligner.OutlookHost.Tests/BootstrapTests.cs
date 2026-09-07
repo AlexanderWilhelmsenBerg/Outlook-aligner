@@ -1,4 +1,5 @@
 using OutlookAligner.Outlook.Contracts;
+using Xunit;
 
 namespace OutlookAligner.OutlookHost.Tests;
 
