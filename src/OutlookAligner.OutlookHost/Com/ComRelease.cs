@@ -4,7 +4,8 @@ namespace OutlookAligner.OutlookHost.Com;
 
 internal static class ComRelease
 {
-    internal static void Release(object? value)
+    internal static void Release<T>(T? value)
+        where T : class
     {
         if (value is null || !Marshal.IsComObject(value))
         {

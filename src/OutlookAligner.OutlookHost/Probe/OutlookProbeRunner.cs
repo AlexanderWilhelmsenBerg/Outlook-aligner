@@ -46,6 +46,12 @@ internal static class OutlookProbeRunner
                 try
                 {
                     store = outlookStores[index];
+                    if (store is null)
+                    {
+                        warnings.Add("One Outlook store resolved to null and was skipped.");
+                        continue;
+                    }
+
                     stores.Add(new OutlookStoreDto(store.DisplayName, store.StoreID));
                 }
                 catch (COMException exception)
@@ -68,14 +74,48 @@ internal static class OutlookProbeRunner
                 try
                 {
                     account = outlookAccounts[index];
+                    if (account is null)
+                    {
+                        warnings.Add("One Outlook account resolved to null and was skipped.");
+                        continue;
+                    }
+
                     var displayName = account.DisplayName;
                     var smtpAddress = ReadSmtpAddress(account, warnings);
                     var accountType = account.AccountType.ToString();
+                    string? storeDisplayName = null;
+                    string? storeId = null;
 
                     try
                     {
                         deliveryStore = account.DeliveryStore;
+                        if (deliveryStore is null)
+                        {
+                            accounts.Add(UnavailableAccount(
+                                displayName,
+                                smtpAddress,
+                                accountType,
+                                storeDisplayName,
+                                storeId,
+                                "Delivery store unavailable."));
+                            continue;
+                        }
+
+                        storeDisplayName = deliveryStore.DisplayName;
+                        storeId = deliveryStore.StoreID;
                         calendar = deliveryStore.GetDefaultFolder(Outlook.OlDefaultFolders.olFolderCalendar);
+                        if (calendar is null)
+                        {
+                            accounts.Add(UnavailableAccount(
+                                displayName,
+                                smtpAddress,
+                                accountType,
+                                storeDisplayName,
+                                storeId,
+                                "Default calendar unavailable."));
+                            continue;
+                        }
+
                         var events = OutlookCalendarReader.Read(
                             calendar,
                             windowStartLocal,
@@ -87,8 +127,8 @@ internal static class OutlookProbeRunner
                             displayName,
                             smtpAddress,
                             accountType,
-                            deliveryStore.DisplayName,
-                            deliveryStore.StoreID,
+                            storeDisplayName,
+                            storeId,
                             calendar.EntryID,
                             CalendarAvailable: true,
                             events.Count,
@@ -97,18 +137,13 @@ internal static class OutlookProbeRunner
                     }
                     catch (COMException exception)
                     {
-                        var error = $"Default calendar unavailable (HRESULT 0x{exception.ErrorCode:X8}).";
-                        accounts.Add(new OutlookAccountDto(
+                        accounts.Add(UnavailableAccount(
                             displayName,
                             smtpAddress,
                             accountType,
-                            deliveryStore?.DisplayName,
-                            deliveryStore?.StoreID,
-                            CalendarEntryId: null,
-                            CalendarAvailable: false,
-                            EventCount: 0,
-                            Events: [],
-                            Error: error));
+                            storeDisplayName,
+                            storeId,
+                            $"Default calendar unavailable (HRESULT 0x{exception.ErrorCode:X8})."));
                     }
                 }
                 catch (COMException exception)
@@ -142,11 +177,31 @@ internal static class OutlookProbeRunner
         }
     }
 
+    private static OutlookAccountDto UnavailableAccount(
+        string displayName,
+        string? smtpAddress,
+        string accountType,
+        string? storeDisplayName,
+        string? storeId,
+        string error)
+        => new(
+            displayName,
+            smtpAddress,
+            accountType,
+            storeDisplayName,
+            storeId,
+            CalendarEntryId: null,
+            CalendarAvailable: false,
+            EventCount: 0,
+            Events: [],
+            Error: error);
+
     private static string? ReadSmtpAddress(Outlook.Account account, ICollection<string> warnings)
     {
         try
         {
-            return string.IsNullOrWhiteSpace(account.SmtpAddress) ? null : account.SmtpAddress;
+            var smtpAddress = account.SmtpAddress;
+            return string.IsNullOrWhiteSpace(smtpAddress) ? null : smtpAddress;
         }
         catch (COMException exception)
         {
