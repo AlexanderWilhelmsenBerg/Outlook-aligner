@@ -80,15 +80,16 @@ internal static class OutlookProbeRunner
                         continue;
                     }
 
-                    var displayName = account.DisplayName;
-                    var smtpAddress = ReadSmtpAddress(account, warnings);
-                    var accountType = account.AccountType.ToString();
+                    var liveAccount = account!;
+                    var displayName = liveAccount.DisplayName;
+                    var smtpAddress = ReadSmtpAddress(liveAccount, warnings);
+                    var accountType = liveAccount.AccountType.ToString();
                     string? storeDisplayName = null;
                     string? storeId = null;
 
                     try
                     {
-                        deliveryStore = account.DeliveryStore;
+                        deliveryStore = liveAccount.DeliveryStore;
                         if (deliveryStore is null)
                         {
                             accounts.Add(UnavailableAccount(
@@ -116,8 +117,9 @@ internal static class OutlookProbeRunner
                             continue;
                         }
 
+                        var liveCalendar = calendar!;
                         var events = OutlookCalendarReader.Read(
-                            calendar,
+                            liveCalendar,
                             windowStartLocal,
                             windowEndLocal,
                             options.IncludeDetails,
@@ -129,7 +131,7 @@ internal static class OutlookProbeRunner
                             accountType,
                             storeDisplayName,
                             storeId,
-                            calendar.EntryID,
+                            liveCalendar.EntryID,
                             CalendarAvailable: true,
                             events.Count,
                             events,
