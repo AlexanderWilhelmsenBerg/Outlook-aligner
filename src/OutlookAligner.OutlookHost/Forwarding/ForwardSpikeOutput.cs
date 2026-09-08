@@ -14,7 +14,8 @@ internal static class ForwardSpikeOutput
 
         if (result.Action is ForwardSpikeAction.ProbeCalendarCommand
             or ForwardSpikeAction.PrepareCalendarCommand
-            or ForwardSpikeAction.PrepareCalendarRecipient)
+            or ForwardSpikeAction.PrepareCalendarRecipient
+            or ForwardSpikeAction.SendCalendarCommand)
         {
             if (result.CommandProbe is not null)
             {
@@ -76,6 +77,10 @@ internal static class ForwardSpikeOutput
         Console.WriteLine("Create the Calendar Forward, resolve exactly one recipient, pin the source account, then discard unsent:");
         Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --prepare-calendar-recipient --entry-id ENTRY_ID --to ADDRESS");
         Console.WriteLine();
+        Console.WriteLine("Actually send through the proven Calendar Forward path:");
+        Console.WriteLine(
+            $"  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --send-calendar-command --entry-id ENTRY_ID --to ADDRESS --confirm-calendar-send {ForwardSpikeOptions.CalendarConfirmationToken}");
+        Console.WriteLine();
         Console.WriteLine("Invoke retained MeetingItem.Forward(), resolve a recipient, then discard without sending:");
         Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --prepare --to ADDRESS");
         Console.WriteLine();
@@ -89,13 +94,16 @@ internal static class ForwardSpikeOutput
         Console.WriteLine("  --probe-calendar-command       Query Outlook's built-in Forward command state without executing it.");
         Console.WriteLine("  --prepare-calendar-command     Execute Calendar Forward and cancel inside AppointmentItem.Forward before completion.");
         Console.WriteLine("  --prepare-calendar-recipient   Allow Calendar Forward to create its native MeetingItem, resolve one recipient, then discard unsent.");
+        Console.WriteLine("  --send-calendar-command        Send through the proven Calendar Forward path; requires its exact confirmation token.");
+        Console.WriteLine("  --confirm-calendar-send TOKEN  Must equal SEND-CALENDAR-FORWARD for --send-calendar-command.");
         Console.WriteLine("  --entry-id ENTRY_ID            Calendar EntryID required by Calendar command modes.");
         Console.WriteLine("  --prepare                      Prepare/discard through a retained native MeetingItem.");
         Console.WriteLine("  --send                         Send through the retained native MeetingItem path. Requires exact confirmation token.");
-        Console.WriteLine("  --to ADDRESS                   Recipient for retained prepare/send and Calendar recipient-prepare modes.");
+        Console.WriteLine("  --confirm-send TOKEN           Must equal SEND-NATIVE-MEETING for retained-request --send.");
+        Console.WriteLine("  --to ADDRESS                   Exactly one intended forwarding recipient for recipient prepare/send modes.");
         Console.WriteLine("  --include-details              Show the matched/verified meeting subject. Off by default.");
         Console.WriteLine("  --help, -h                     Show this help without opening Outlook.");
         Console.WriteLine();
-        Console.WriteLine("No vCalendar fallback is used. Calendar recipient-prepare resolves one recipient but never calls Send() or Save().");
+        Console.WriteLine("No vCalendar fallback is used. Calendar send revalidates identity/capability, requires zero pre-existing recipients, resolves exactly one recipient, pins SendUsingAccount, and only then calls MeetingItem.Send().");
     }
 }
