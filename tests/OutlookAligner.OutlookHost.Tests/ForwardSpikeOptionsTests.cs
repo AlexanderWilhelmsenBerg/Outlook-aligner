@@ -43,7 +43,7 @@ public sealed class ForwardSpikeOptionsTests
     }
 
     [Fact]
-    public void CalendarCommandPrepareRequiresEntryIdAndNoRecipient()
+    public void CancelledCalendarCommandPrepareRequiresEntryIdAndRejectsRecipient()
     {
         var parsed = ForwardSpikeOptions.TryParse(
             [
@@ -61,6 +61,61 @@ public sealed class ForwardSpikeOptionsTests
         Assert.Equal(ForwardSpikeAction.PrepareCalendarCommand, options.Action);
         Assert.Equal("calendar-entry-id", options.CalendarEntryId);
         Assert.Null(options.Recipient);
+
+        var withRecipient = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--prepare-calendar-command",
+                "--entry-id", "calendar-entry-id",
+                "--to", "target@example.invalid",
+            ],
+            out _,
+            out var recipientError);
+
+        Assert.False(withRecipient);
+        Assert.Contains("--to is not valid", recipientError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CalendarRecipientPrepareRequiresEntryIdAndRecipient()
+    {
+        var parsed = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--prepare-calendar-recipient",
+                "--entry-id", "calendar-entry-id",
+                "--to", "target@example.invalid",
+            ],
+            out var options,
+            out var error);
+
+        Assert.True(parsed);
+        Assert.Null(error);
+        Assert.Equal(ForwardSpikeAction.PrepareCalendarRecipient, options.Action);
+        Assert.Equal("calendar-entry-id", options.CalendarEntryId);
+        Assert.Equal("target@example.invalid", options.Recipient);
+    }
+
+    [Fact]
+    public void CalendarRecipientPrepareWithoutRecipientIsRejected()
+    {
+        var parsed = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--prepare-calendar-recipient",
+                "--entry-id", "calendar-entry-id",
+            ],
+            out _,
+            out var error);
+
+        Assert.False(parsed);
+        Assert.Contains("--to is required", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -71,13 +126,13 @@ public sealed class ForwardSpikeOptionsTests
                 "--forward-spike",
                 "--source-smtp", "source@example.invalid",
                 "--global-id", "global-id",
-                "--prepare-calendar-command",
+                "--probe-calendar-command",
             ],
             out _,
             out var error);
 
         Assert.False(parsed);
-        Assert.Equal("--entry-id is required with --probe-calendar-command or --prepare-calendar-command.", error);
+        Assert.Contains("--entry-id is required", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -94,39 +149,21 @@ public sealed class ForwardSpikeOptionsTests
             out var error);
 
         Assert.False(parsed);
-        Assert.Equal("--entry-id is valid only with --probe-calendar-command or --prepare-calendar-command.", error);
+        Assert.Equal("--entry-id is valid only with a Calendar command mode.", error);
     }
 
     [Fact]
-    public void CalendarCommandPrepareRejectsRecipient()
+    public void CalendarCommandModesAreMutuallyExclusiveWithRetainedPrepare()
     {
         var parsed = ForwardSpikeOptions.TryParse(
             [
                 "--forward-spike",
                 "--source-smtp", "source@example.invalid",
                 "--global-id", "global-id",
-                "--prepare-calendar-command",
+                "--prepare-calendar-recipient",
                 "--entry-id", "calendar-entry-id",
+                "--prepare",
                 "--to", "target@example.invalid",
-            ],
-            out _,
-            out var error);
-
-        Assert.False(parsed);
-        Assert.Contains("does not accept --to", error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CalendarCommandModesCannotBeCombined()
-    {
-        var parsed = ForwardSpikeOptions.TryParse(
-            [
-                "--forward-spike",
-                "--source-smtp", "source@example.invalid",
-                "--global-id", "global-id",
-                "--probe-calendar-command",
-                "--prepare-calendar-command",
-                "--entry-id", "calendar-entry-id",
             ],
             out _,
             out var error);
