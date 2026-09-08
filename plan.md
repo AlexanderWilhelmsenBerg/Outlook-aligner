@@ -1,6 +1,6 @@
 # Outlook Aligner — Implementation Plan
 
-Status: **Phase 0 complete ✅. Phase 1 complete ✅ and merged. Phase 2 native-forwarding mechanism proven end-to-end; reliability matrix in progress 🚧 on PR #5.**
+Status: **Phase 0 complete ✅. Phase 1 complete ✅ and merged. Phase 2 native-forwarding mechanism proven end-to-end; broad reliability testing deferred into the UI-assisted test phase. Phase 3 UI-assisted development in progress 🚧.**
 
 Last reviewed: 2026-09-08
 
@@ -25,6 +25,7 @@ The command-line programs used in early phases are **diagnostic and acceptance-t
   4. **Diagnostics**
 - Calendar is the primary/home view.
 - The UI must expose account discovery, refresh, scan horizon, event comparison, authority, status, and supported alignment actions without requiring CLI use.
+- The UI must discover and carry Outlook technical identity itself. Normal workflows must not require the user to copy SMTP addresses, StoreIDs, EntryIDs, or GlobalAppointmentIDs.
 - All write actions must clearly identify source/target account and intended effect before execution.
 - Bulk writes require an immutable preview and explicit confirmation.
 - The UI must show partial failures instead of hiding them or aborting the whole operation.
@@ -84,7 +85,7 @@ The real-machine Phase 2 spike proved this path end-to-end on an accepted Kverne
 
 `AppointmentItem.ForwardAsVcal()` is not equivalent and must never be silently presented as native forwarding.
 
-The older retained-`MeetingItem` recovery path is not a prerequisite for production Forward because real testing showed accepted meetings may no longer have a recoverable request in Inbox/Deleted Items. It may remain as a secondary path only if Phase 2 closeout finds a clear benefit worth the extra complexity.
+The older retained-`MeetingItem` recovery path is not a prerequisite for production Forward because real testing showed accepted meetings may no longer have a recoverable request in Inbox/Deleted Items. It may remain as a secondary path only if later testing finds a clear benefit worth the extra complexity.
 
 The GUI treats Forward as a **per-event capability**. If Outlook reports native Forward unavailable, the action must be disabled/hidden with a clear reason and must not fall back to fake ICS forwarding.
 
@@ -180,6 +181,8 @@ OutlookAligner.OutlookHost.exe
 
 The Outlook host is not a Windows service.
 
+During the first Phase 3 UI-assisted slice, the app may launch OutlookHost as a child process and exchange versioned JSON/text through redirected standard streams. This is a **transitional local transport**, not a change to the architecture boundary. Before production write workflows are considered complete, the transport converges on the planned versioned local IPC/named-pipe host. UI/view-model contracts must remain transport-independent.
+
 ### UI/host boundary invariants
 
 - `OutlookAligner.App` owns presentation, view state, confirmation flows, and user interaction.
@@ -233,37 +236,55 @@ End-to-end Calendar-command mechanism is proven on a real accepted meeting:
 - forwarded meeting arrived in another user-controlled Outlook account;
 - no vCalendar fallback used.
 
-Remaining closeout is a small reliability matrix for recurrence/Teams behavior, another source account, and forwarding-disabled behavior if a suitable event is readily available. Then decide whether the retained-request Path A should be kept or removed/simplified.
+The broad reliability matrix is intentionally deferred until the UI-assisted test workflow can select meetings/accounts itself. PR #5 remains the forwarding foundation and is not merged without explicit user approval.
 
-### Phase 3 — identity prototype
+### Phase 3 — UI-assisted development and testing foundation 🚧
 
-Prove correlation and recurrence identity independently of the production UI:
+Bring a usable application shell forward so subsequent development can be tested efficiently without manual identifier lookup.
+
+First slice:
+
+- real `App.xaml` / `MainWindow` WinUI application;
+- NavigationView with Calendar, Alignment, Settings and Diagnostics;
+- automatic Outlook account/calendar discovery through OutlookHost;
+- event list/detail selection across discovered accounts;
+- source account derived from the selected event;
+- target account chosen from other discovered Outlook accounts;
+- technical IDs hidden from the normal workflow and available only for Diagnostics;
+- per-event native Forward capability check;
+- safe **Prepare Forward (discard)** action that revalidates capability and never sends;
+- packaged self-contained Windows test bundle containing UI + OutlookHost.
+
+Next Phase 3 slices before broad manual testing:
+
+- correlation/grouping by native meeting identity;
+- preliminary Alignment states and comparison view;
+- authority/origin model presentation;
+- FullCalendar/WebView2 event visualization;
+- InfoBar-style user-facing error/partial-failure handling;
+- deliberate GUI confirmation for real native Forward send;
+- managed-copy identity foundations required by Copy/Move;
+- diagnostics that make recurrence/source-account portability testing easy.
+
+See [`docs/phase-3.md`](docs/phase-3.md).
+
+### Phase 4 — identity, correlation and read-only alignment model
+
+Use the Phase 3 UI as the working test surface while proving:
 
 - GlobalAppointmentID behavior across the three accounts;
 - series master vs occurrence vs exception identity;
 - moved occurrence handling;
 - managed-copy custom-property schema;
-- authority/origin confidence model.
+- authority/origin confidence model;
+- `Aligned`, `Missing`, `Moved`, `DetailsDifferent`, `Duplicate`, and `Conflict` classification;
+- comparison/detail UI driven by logical groups rather than raw calendar rows.
 
-### Phase 4 — production read-only WinUI UI
-
-Build the real application shell and read-only product experience specified in [`docs/ui.md`](docs/ui.md):
-
-- `App.xaml` and `MainWindow`;
-- NavigationView shell;
-- Calendar, Alignment, Settings, Diagnostics pages;
-- MVVM and IPC wiring;
-- FullCalendar/WebView2 integration;
-- account discovery and refresh;
-- comparison/detail pane;
-- loading/error/partial-failure states;
-- keyboard, high-DPI, theme and accessibility requirements.
-
-Phase 4 is not satisfied by the diagnostic CLI.
+The production Calendar/Alignment read experience should mature during this phase instead of waiting until after the identity prototype.
 
 ### Phase 5 — Copy Full
 
-Implement managed full-detail copies with identity properties and operation history.
+Implement managed full-detail copies with identity properties, preview, user-facing errors, and operation history.
 
 ### Phase 6 — Copy Busy
 
@@ -271,7 +292,7 @@ Implement privacy placeholders and associated UI/preview.
 
 ### Phase 7 — Move Selected
 
-Allow deliberate time alignment of managed non-authoritative copies only.
+Allow deliberate time alignment of managed non-authoritative copies only. This begins only after managed-copy identity and authority are proven. The UI must show source, authority, target, old time, new time, and unsupported reasons before execution.
 
 ### Phase 8 — Move All
 
@@ -281,8 +302,16 @@ Preview-first batch movement with conflict/unsupported exclusions and immutable 
 
 Only after recurrence identity is proven, add supported recurring Copy/Move operations with explicit unsupported-case handling.
 
-### Phase 10 — hardening/release
+### Phase 10 — integrated testing, hardening and release
 
+Use the production-like UI for the deferred broad test matrix:
+
+- native Forward across recurring/Teams meetings and different source accounts;
+- unavailable/disabled Forward behavior;
+- Copy Full / Copy Busy safety and fidelity;
+- Move Selected / Move All with authority/conflict/error cases;
+- recurrence and exception cases;
+- partial Outlook/COM failures and recovery;
 - packaging/installer;
 - upgrade/migration tests;
 - crash-safe operation history;
@@ -301,6 +330,7 @@ Only after recurrence identity is proven, add supported recurring Copy/Move oper
 - Never leak meeting body/attendees/online links into ordinary diagnostics.
 - All production write actions require explicit user intent, capability checks, and operation history.
 - Bulk writes require preview + confirmation.
+- Do not introduce Move writes merely to make the UI testable; identity, managed-copy ownership, and authority prerequisites remain mandatory.
 
 ## 8. V1 acceptance gate
 
@@ -308,7 +338,7 @@ V1 is not complete until all of the following are true:
 
 - packaged WinUI 3 desktop GUI exists and launches normally;
 - Calendar/Alignment/Settings/Diagnostics are functional;
-- no normal workflow requires CLI/PowerShell;
+- no normal workflow requires CLI/PowerShell or manual Outlook IDs;
 - all three configured Outlook accounts are discoverable;
 - bounded calendar scanning/correlation works;
 - Forward/Copy/Move actions truthfully represent their semantics;
