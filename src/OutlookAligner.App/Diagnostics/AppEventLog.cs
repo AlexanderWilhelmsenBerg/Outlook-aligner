@@ -32,6 +32,7 @@ internal sealed class AppEventLog
     private const long MaximumLogFileBytes = 5 * 1024 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Lazy<AppEventLog> CurrentInstance = new(() => new AppEventLog());
 
     private readonly object _gate = new();
     private readonly List<AppLogEntry> _entries = [];
@@ -46,11 +47,22 @@ internal sealed class AppEventLog
         var directory = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
-            Directory.CreateDirectory(directory);
+            try
+            {
+                Directory.CreateDirectory(directory);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
         LoadExistingEntries();
     }
+
+    internal static AppEventLog Current => CurrentInstance.Value;
 
     internal string FilePath { get; }
 
@@ -99,12 +111,34 @@ internal sealed class AppEventLog
                 _entries.RemoveRange(0, _entries.Count - MaximumInMemoryEntries);
             }
 
+            TryPersist(entry);
+        }
+
+        EntryAdded?.Invoke(entry);
+    }
+
+    private void TryPersist(AppLogEntry entry)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(FilePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             TryRollLogFile();
             var json = JsonSerializer.Serialize(entry, JsonOptions);
             File.AppendAllText(FilePath, json + Environment.NewLine);
         }
-
-        EntryAdded?.Invoke(entry);
+        catch (IOException)
+        {
+            // In-memory diagnostics remain available if persistence temporarily fails.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // In-memory diagnostics remain available if persistence is unavailable.
+        }
     }
 
     private void LoadExistingEntries()
