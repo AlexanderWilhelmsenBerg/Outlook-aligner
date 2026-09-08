@@ -11,20 +11,61 @@ public enum AppLogLevel
     Error,
 }
 
-public sealed record AppLogEntry(
-    DateTimeOffset Timestamp,
-    AppLogLevel Level,
-    string Source,
-    string Message,
-    string? EventContext,
-    string? Details)
+public sealed class AppLogEntry
 {
+    public AppLogEntry()
+    {
+    }
+
+    public AppLogEntry(
+        DateTimeOffset timestamp,
+        AppLogLevel level,
+        string source,
+        string message,
+        string? eventContext,
+        string? details)
+    {
+        Timestamp = timestamp;
+        Level = level;
+        Source = source;
+        Message = message;
+        EventContext = eventContext;
+        Details = details;
+    }
+
+    public DateTimeOffset Timestamp { get; set; }
+
+    public AppLogLevel Level { get; set; }
+
+    public string Source { get; set; } = string.Empty;
+
+    public string Message { get; set; } = string.Empty;
+
+    public string? EventContext { get; set; }
+
+    public string? Details { get; set; }
+
     public string TimestampDisplay => Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.CurrentCulture);
 
     public string LevelDisplay => Level.ToString().ToUpperInvariant();
 }
 
-public sealed record LogLevelChoice(string Name, AppLogLevel? Level);
+public sealed class LogLevelChoice
+{
+    public LogLevelChoice()
+    {
+    }
+
+    public LogLevelChoice(string name, AppLogLevel? level)
+    {
+        Name = name;
+        Level = level;
+    }
+
+    public string Name { get; set; } = string.Empty;
+
+    public AppLogLevel? Level { get; set; }
+}
 
 internal sealed class AppEventLog
 {
