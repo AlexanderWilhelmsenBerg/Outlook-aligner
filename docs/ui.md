@@ -1,8 +1,8 @@
 # Outlook Aligner — Production UI Contract
 
-Status: **Required for v1. Implementation begins in Phase 4.**
+Status: **Required for v1. Implementation is underway in Phase 3; the current WinUI/read-alignment increment is not yet the complete production UI.**
 
-This document turns the UI from an architectural intention into a product requirement. The CLI tools used in Phases 1–3 are diagnostic harnesses only.
+This document defines the production interaction contract. The CLI tools used in Phases 1–2 are diagnostic/acceptance harnesses. Phase 3 moves normal testing into the WinUI application shell while preserving the OutlookHost COM boundary.
 
 ## 1. Product surface
 
@@ -15,15 +15,29 @@ The application shell uses a `NavigationView` with four primary destinations:
 3. **Settings** — user preferences and scan configuration
 4. **Diagnostics** — Outlook health, capabilities, operation history, and technical details
 
-The title area should expose Outlook connection/profile state and refresh activity without turning technical status into the visual focus of the application.
+The current Phase 3 branch already implements this shell and basic functional versions of all four destinations. Production completeness still requires richer calendar visualization, persistence, final IPC, write confirmation/history, accessibility hardening, and the later Copy/Move write phases.
 
 ## 2. Calendar page
 
 ### Purpose
 
-Give the user one understandable view of the three calendars and make it obvious where events are aligned or differ.
+Give the user one understandable view of the configured calendars and make it obvious where events are aligned or differ.
 
-### Layout
+### Current Phase 3 subset
+
+The current increment:
+
+- reads the bounded Outlook calendar window from the GUI;
+- lists events across discovered accounts;
+- derives source account and technical identity internally;
+- offers other discovered accounts as Forward test targets;
+- shows selected-event details;
+- exposes native Forward capability check and safe **Prepare Forward (discard)**;
+- keeps raw Outlook IDs in Diagnostics.
+
+The current increment does not send a meeting from the GUI.
+
+### Production layout
 
 Top command area:
 
@@ -40,6 +54,8 @@ Main area:
 - alignment state represented separately from account identity so color is not the only status signal;
 - selecting an event opens a comparison/detail pane rather than requiring navigation away from the calendar.
 
+FullCalendar/WebView2 integration should not be expanded until the repository can generate and commit a real Node 24 lockfile and use `npm ci`; never fabricate a lockfile.
+
 Comparison/detail pane:
 
 - logical event status;
@@ -52,7 +68,7 @@ Comparison/detail pane:
 
 ### Forward meeting action
 
-Phase 2 has proven a genuine Classic Outlook native Forward path for an accepted Calendar meeting. The production UI must present this as one normal user action, **Forward meeting**, not as a choice between diagnostic COM mechanisms.
+Phase 2 proved a genuine Classic Outlook native Forward path for an accepted Calendar meeting and merged that mechanism in PR #5. The production UI presents this as one normal user action, **Forward meeting**, not as a choice between diagnostic COM mechanisms.
 
 When the user selects Forward meeting:
 
@@ -69,11 +85,30 @@ If the event cannot be natively forwarded, **Forward meeting is disabled** and t
 
 The retained-request recovery route investigated in Phase 2 is an implementation detail/diagnostic path and must not appear as a separate product action.
 
+The current Phase 3 increment stops one step earlier: it can check capability and prepare/discard the native forwarded item, but it intentionally exposes no GUI Send action.
+
 ## 3. Alignment page
 
 ### Purpose
 
 Provide a task-oriented queue of items that need attention.
+
+### Current Phase 3 subset
+
+The current increment already provides:
+
+- preliminary non-recurring logical grouping;
+- `Aligned`, `Missing`, `Moved`, `DetailsDifferent`, `Duplicate`, `Conflict`, recurrence-unresolved and uncorrelated states;
+- read-only detection/classification of Outlook Aligner managed-copy metadata;
+- fail-closed `Conflict` handling when managed metadata is incomplete, unsupported, unreadable, or internally inconsistent;
+- `KnownOrigin` authority inference only from validated consistent managed-copy provenance;
+- session-only manual authority selection where origin is unknown;
+- a read-only Move Selected preview with `MOVE`, `SKIP`, and `BLOCKED` lines;
+- no Move execution command.
+
+Recurring identity remains deliberately unresolved.
+
+### Production page
 
 The page includes:
 
@@ -91,7 +126,8 @@ The page must clearly distinguish:
 - original/authoritative events;
 - Aligner-managed copies;
 - true forwarded meetings;
-- unmanaged/pre-existing possible matches.
+- unmanaged/pre-existing possible matches;
+- unresolved/suspicious metadata that must not be treated as trusted ownership evidence.
 
 ## 4. Settings page
 
@@ -103,6 +139,8 @@ At minimum:
 - privacy preference for normal diagnostics/details;
 - theme preference if the app does not simply follow Windows;
 - confirmation preferences only where they do not weaken mandatory safety gates.
+
+The current Phase 3 Settings page already owns the in-session scan horizon and displays discovered accounts/calendar availability. Persistence is not yet implemented.
 
 Settings must not expose or request Outlook passwords, Graph credentials, Azure app registration, or tenant consent.
 
@@ -116,9 +154,12 @@ Diagnostics can expose technical information hidden from normal UI:
 - last refresh duration/results/errors;
 - per-event native Forward capability where useful;
 - `StoreID`, `EntryID`, `GlobalAppointmentID` for troubleshooting;
+- managed-copy classification/property values;
 - HRESULT/type context;
 - operation history;
 - app/package/version information.
+
+The current Phase 3 Diagnostics page already shows selected-event IDs, managed-copy metadata/classification, scan summaries, warnings, and host output.
 
 Meeting body, attendee lists and online-meeting URLs must not be dumped into diagnostics by default.
 
@@ -132,7 +173,10 @@ Meeting body, attendee lists and online-meeting URLs must not be dumped into dia
 - Once confirmed, execution uses the previewed plan rather than silently recalculating a materially different plan.
 - Partial failures are shown per item; already successful operations remain visible in history.
 - The authoritative original is never mutated by Move Selected/Move All.
+- Invalid/unreadable managed-copy metadata blocks managed-copy write eligibility.
 - V1 has no deletion synchronization.
+
+The current Phase 3 Move preview is intentionally preview-only and therefore exercises safety planning without introducing Outlook Move writes.
 
 ## 7. Loading, empty, error, and degraded states
 
@@ -147,9 +191,12 @@ The production UI must deliberately handle:
 - OutlookHost crash/restart;
 - native Forward unavailable for a particular event;
 - stale event locator that requires refresh;
+- managed metadata that is unreadable/incomplete/unsupported;
 - write action that fails after preview.
 
 A failure in one account or event must not unnecessarily blank the entire application.
+
+The current increment includes a user-facing warning for partial scans and directs technical detail to Diagnostics; later focused PRs should continue hardening degraded-state presentation.
 
 ## 8. Accessibility and Windows behavior
 
@@ -162,26 +209,32 @@ A failure in one account or event must not unnecessarily blank the entire applic
 - Resizable desktop window with sensible minimum size.
 - Long subjects/account names truncate gracefully and remain discoverable through accessible/tool-tip text.
 
+These remain production acceptance requirements even where the current development shell has not yet been manually verified for every item.
+
 ## 9. UI/OutlookHost boundary
 
 The UI never receives COM objects.
 
-`OutlookAligner.App` exchanges versioned plain DTOs with `OutlookAligner.OutlookHost` through local IPC. OutlookHost owns all COM interaction, including capability checks and writes.
+`OutlookAligner.App` exchanges versioned plain DTOs/results with `OutlookAligner.OutlookHost`. OutlookHost owns all COM interaction, including capability checks and writes.
 
-The production app must not shell out to the diagnostic CLI and scrape console text as its application protocol.
+The current Phase 3 development transport launches the sibling OutlookHost process and uses redirected standard streams for versioned JSON/text. This is a temporary implementation aid, not the final production IPC design.
 
-## 10. Phase 4 acceptance gate
+Before production write workflows are complete, the app must move to the planned versioned local IPC/named-pipe model. View models/Core DTOs must not depend on the temporary transport.
 
-Phase 4 is not complete until:
+## 10. Production UI acceptance gate
 
-- a real packaged WinUI 3 application launches;
-- `App.xaml` / `MainWindow` / NavigationView exist;
-- Calendar, Alignment, Settings and Diagnostics pages are navigable;
-- OutlookHost IPC is wired with versioned DTOs;
+The production GUI is not complete until:
+
+- a packaged WinUI 3 application launches normally;
+- Calendar, Alignment, Settings and Diagnostics are functional;
+- production OutlookHost IPC is wired with versioned DTOs;
 - account discovery and refresh work from the GUI;
 - FullCalendar renders the read model;
 - selecting an event exposes comparison/status/authority/action state;
-- Forward meeting capability can be represented correctly in the UI even before all production write phases are enabled;
+- Forward meeting capability and confirmation/send behavior are represented correctly;
 - loading/empty/error/partial-failure states exist;
 - normal usage needs no CLI arguments;
+- persistence/history required by write workflows exists;
 - keyboard/high-DPI/theme/accessibility basics are verified.
+
+These acceptance items may be delivered through multiple focused PRs. A single PR is not required to complete an entire roadmap phase.
