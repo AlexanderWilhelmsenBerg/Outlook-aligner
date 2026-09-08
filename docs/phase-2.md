@@ -17,8 +17,7 @@ Microsoft documents that:
 - `MeetingItem.Forward()` executes Outlook's native Forward action and returns a new `MeetingItem`;
 - `MeetingItem.GetAssociatedAppointment(false)` maps a retained meeting request back to its calendar appointment without adding an item;
 - an accepted calendar meeting is represented as `AppointmentItem`;
-- `AppointmentItem` exposes a `Forward` event when the user invokes Outlook's Forward action, and that event supplies the new forwarded object plus a cancellable `Cancel` flag;
-- setting `Cancel = true` in `AppointmentItem.Forward` prevents the Forward operation from completing and prevents the new item from being displayed;
+- `AppointmentItem` exposes a `Forward` **event** when the user invokes Outlook's Forward action, but does not expose an equivalent native Forward method;
 - Classic Outlook itself can forward an accepted meeting directly from Calendar;
 - `CommandBars.ExecuteMso(idMso)` can invoke a built-in Office command when the object model has no direct method.
 
@@ -27,11 +26,9 @@ Primary references:
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.meetingitem.forward%28method%29
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.meetingitem.getassociatedappointment
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.appointmentitem.forward
-- https://learn.microsoft.com/en-us/dotnet/api/microsoft.office.interop.outlook.itemevents_10_forwardeventhandler
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.appointmentitem.forwardasvcal
 - https://learn.microsoft.com/en-us/office/vba/api/office.commandbars.executemso
 - https://support.microsoft.com/en-us/outlook/calendar/forward-a-meeting-in-outlook
-- https://github.com/OfficeDev/office-fluent-ui-command-identifiers
 
 ## Path A — retained MeetingItem recovery
 
@@ -151,7 +148,7 @@ This makes the Calendar-command path a serious candidate for the product's gener
 
 ### B2. Prepare/cancel — command executes, Forward event cancels before completion
 
-New diagnostic mode:
+Command:
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --forward-spike `
@@ -176,11 +173,60 @@ Safety contract:
 
 The CLI deliberately rejects `--to` in this mode. If the event is not raised, cancellation is not observed, or the new item is not a native `MeetingItem`, the experiment fails closed.
 
-### B3. Recipient/send — only after B2 succeeds
+## Real-machine result #3 — Calendar Forward produces a native MeetingItem and cancels cleanly
 
-Only after B2 proves a safely capturable native `MeetingItem` should the spike add a separate recipient/send experiment.
+Tested 2026-09-08 against the **same accepted meeting** used for results #1 and #2.
 
-That later step must use another account controlled by the user, require an explicit confirmation token, and verify genuine meeting behavior at the target rather than a generic email/ICS attachment.
+Observed:
+
+- `idMso`: `Forward`;
+- identifier valid: **True**;
+- visible: **True**;
+- enabled: **True**;
+- `AppointmentItem.Forward` event raised;
+- forwarded object type: **native `MeetingItem`**;
+- forwarded message class: **`IPM.Schedule.Meeting.Request`**;
+- `Cancel=True` set inside the event;
+- forward operation did not complete or display the new item;
+- verified subject: `List of application`.
+
+### Conclusion from result #3
+
+The Calendar-command route has now proved all of the important pre-send mechanics on a real accepted meeting whose original request is no longer recoverable:
+
+1. Outlook exposes native Calendar Forward;
+2. the command can be invoked programmatically;
+3. Outlook raises the documented `AppointmentItem.Forward` event;
+4. the event supplies a genuine native `MeetingItem`, not a MailItem/vCalendar substitute;
+5. cancellation works before the forward is presented to the user.
+
+This is substantially stronger than Path A for the tested meeting and justifies progressing to recipient handling. It does **not** yet prove that the forwarded meeting can be addressed and sent safely from the selected source account.
+
+### B3a. Recipient prepare/discard — next gate
+
+The next experiment should deliberately avoid sending. It will allow Outlook's Forward operation to complete far enough to obtain the native forwarded `MeetingItem`, then:
+
+1. add exactly one explicit recipient supplied with `--to`;
+2. require `Recipients.ResolveAll()`;
+3. pin `SendUsingAccount` to the selected source Outlook account;
+4. verify no unexpected pre-existing recipients are present;
+5. close/discard the unsent forwarded item;
+6. verify no draft remains and the source appointment is unchanged.
+
+Only if B3a succeeds should Phase 2 expose a separately confirmed Calendar-command send mode.
+
+### B3b. Native Calendar-command send — only after B3a succeeds
+
+The final send experiment must:
+
+- target another account controlled by the user;
+- require an explicit send mode and exact confirmation token;
+- revalidate meeting identity and Forward capability immediately before executing;
+- add exactly one intended recipient;
+- resolve the recipient;
+- set `SendUsingAccount` to the selected source account;
+- call `MeetingItem.Send()` only after all gates pass;
+- verify the target receives a genuine meeting request with normal Accept/Tentative/Decline behavior and working Teams join where applicable.
 
 ## Positive-control test for Path A
 
@@ -191,7 +237,7 @@ Possible outcomes:
 - **1 native match:** Path A remains conditionally useful/direct;
 - **0 matches despite the visible request:** the current request-correlation implementation needs repair before judging Path A.
 
-This positive control is useful evidence but no longer blocks testing Path B because result #2 independently proves the Calendar native Forward capability exists.
+This positive control is useful evidence but no longer blocks testing Path B because results #2 and #3 independently prove the Calendar native Forward route exists and produces a native MeetingItem.
 
 ## Privacy
 
@@ -220,19 +266,20 @@ Before PR #5 may merge:
 
 - [x] zero-match real-world result recorded for an accepted meeting;
 - [ ] positive control with invitation visibly retained in Inbox;
-- [ ] if exactly one match exists, retained-request Prepare succeeds and discards unsent;
-- [ ] retained-request send is optional if the Calendar-command route proves superior and reliable.
+- [ ] if exactly one match exists, Prepare succeeds and discards unsent;
+- [ ] if Prepare succeeds, one explicitly confirmed native send is verified.
 
 ### Calendar-command path
 
-- [x] exact Microsoft Fluent command identifier `Forward` confirmed;
+- [x] exact Microsoft Fluent command identifier confirmed;
 - [x] capability probe reports valid/visible/enabled state without executing Forward;
-- [ ] prepare/cancel invocation succeeds;
-- [ ] `AppointmentItem.Forward` produces a native `MeetingItem`;
-- [ ] `Cancel = true` prevents the forward from completing/displaying;
-- [ ] no draft remains after the experiment;
+- [x] prepare/cancel invocation tested only after capability probe succeeds;
+- [x] appointment Forward event produces the expected native `MeetingItem`;
+- [x] cancellation prevents the forward from completing/displaying;
+- [ ] recipient prepare/discard succeeds with exactly one intended recipient;
+- [ ] no draft remains after recipient prepare/discard;
 - [ ] source appointment remains unchanged;
-- [ ] one explicitly confirmed recipient/send test occurs only after prepare/cancel passes;
+- [ ] one explicitly confirmed Calendar-command send is tested only after recipient prepare passes;
 - [ ] target receives genuine meeting behavior and Teams join remains usable where applicable.
 
 ### General
@@ -263,7 +310,7 @@ Hosted runners cannot prove live Outlook/Exchange forwarding but must continue t
 - `2` — invalid command line.
 - `3` — Outlook COM failure.
 - `4` — unexpected/dependency failure.
-- `5` — source/native selection, command capability, event capture, or correlation could not be resolved safely.
+- `5` — source/native selection or correlation could not be resolved safely.
 - `6` — recipient could not be resolved; unsent forward discarded.
 
 ## Explicit non-goals
