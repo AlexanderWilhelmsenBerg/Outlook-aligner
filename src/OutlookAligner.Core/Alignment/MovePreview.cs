@@ -141,7 +141,7 @@ public static class MovePreviewPlanner
 
     private static void AddManagedMetadataBlockingReasons(
         MovePreviewMember[] members,
-        ICollection<string> blockingReasons)
+        List<string> blockingReasons)
     {
         var managedCopies = members.Where(member => member.IsManagedCopy).ToArray();
         if (managedCopies.Length == 0)
