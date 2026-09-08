@@ -10,9 +10,9 @@ namespace OutlookAligner.OutlookHost.Tests;
 public sealed class BootstrapTests
 {
     [Fact]
-    public void ProtocolVersionReflectsManagedCopyMetadataContract()
+    public void ProtocolVersionReflectsMeetingStatusContract()
     {
-        Assert.Equal(2, OutlookHostProtocol.Version);
+        Assert.Equal(3, OutlookHostProtocol.Version);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class BootstrapTests
         var filter = OutlookDateFilter.Build(start, end, culture);
 
         Assert.Contains(start.ToString("g", culture), filter, StringComparison.Ordinal);
-        Assert.Contains(end.ToString("g", culture), filter, StringComparison.Ordinal);
+        Assert.Contains(end.ToString("g", culture), StringComparison.Ordinal);
         Assert.Contains("[End] >", filter, StringComparison.Ordinal);
         Assert.Contains("[Start] <", filter, StringComparison.Ordinal);
     }
@@ -146,6 +146,7 @@ public sealed class BootstrapTests
         Assert.DoesNotContain("Sensitive location", json, StringComparison.Ordinal);
         Assert.Contains("\"Subject\": null", json, StringComparison.Ordinal);
         Assert.Contains("\"Location\": null", json, StringComparison.Ordinal);
+        Assert.Contains("\"MeetingStatus\": \"olMeetingReceived\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -157,6 +158,7 @@ public sealed class BootstrapTests
 
         Assert.Contains("Expected subject", json, StringComparison.Ordinal);
         Assert.Contains("Expected location", json, StringComparison.Ordinal);
+        Assert.Contains("\"MeetingStatus\": \"olMeetingReceived\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -183,6 +185,7 @@ public sealed class BootstrapTests
             IsAllDay: false,
             IsRecurring: false,
             RecurrenceState: "olApptNotRecurring",
+            MeetingStatus: "olMeetingReceived",
             BusyStatus: "olBusy",
             Sensitivity: "olNormal",
             Subject: subject,
