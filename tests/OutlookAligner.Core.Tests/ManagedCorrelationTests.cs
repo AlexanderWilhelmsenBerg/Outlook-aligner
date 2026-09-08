@@ -68,6 +68,42 @@ public sealed class ManagedCorrelationTests
         Assert.Contains("managed copy", group.Explanation, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void ManagedCopiesWithConflictingOriginsBecomeConflict()
+    {
+        var source = Event(Accounts[0], "source", "source-global", false, null);
+        var copyOne = Event(Accounts[1], "copy-one", "copy-one-global", true, "source-global");
+        var copyTwo = Event("third@example.invalid", "copy-two", "copy-two-global", true, "source-global") with
+        {
+            ManagedSourceAccountId = "other-source@example.invalid",
+        };
+
+        var group = Assert.Single(EventCorrelation.BuildGroups(
+            [source, copyOne, copyTwo],
+            [Accounts[0], Accounts[1], "third@example.invalid"]));
+
+        Assert.Equal(AlignmentState.Conflict, group.State);
+        Assert.Contains("source account", group.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ManagedCopiesWithConflictingSyncGroupsBecomeConflict()
+    {
+        var source = Event(Accounts[0], "source", "source-global", false, null);
+        var copyOne = Event(Accounts[1], "copy-one", "copy-one-global", true, "source-global");
+        var copyTwo = Event("third@example.invalid", "copy-two", "copy-two-global", true, "source-global") with
+        {
+            ManagedSyncGroupId = "22222222-2222-2222-2222-222222222222",
+        };
+
+        var group = Assert.Single(EventCorrelation.BuildGroups(
+            [source, copyOne, copyTwo],
+            [Accounts[0], Accounts[1], "third@example.invalid"]));
+
+        Assert.Equal(AlignmentState.Conflict, group.State);
+        Assert.Contains("sync group", group.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ObservedCalendarEvent Event(
         string account,
         string locator,

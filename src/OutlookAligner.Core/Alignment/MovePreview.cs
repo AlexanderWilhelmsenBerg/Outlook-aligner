@@ -7,7 +7,9 @@ public sealed record MovePreviewMember(
     DateTime EndLocal,
     bool IsAllDay,
     bool IsRecurring,
-    bool IsManagedCopy);
+    bool IsManagedCopy,
+    string? ManagedSyncGroupId = null,
+    string? ManagedSourceAccountId = null);
 
 public sealed record MovePreviewAction(
     string AccountKey,
@@ -67,6 +69,8 @@ public static class MovePreviewPlanner
             blockingReasons.Add($"Duplicate members must be resolved first: {string.Join(", ", duplicateAccounts)}.");
         }
 
+        AddManagedMetadataBlockingReasons(memberArray, blockingReasons);
+
         var authorityMembers = memberArray
             .Where(member => string.Equals(member.AccountKey, authorityAccountKey, StringComparison.OrdinalIgnoreCase))
             .ToArray();
@@ -76,6 +80,11 @@ public static class MovePreviewPlanner
             blockingReasons.Add(authorityMembers.Length == 0
                 ? "The selected authority account has no observed member."
                 : "The selected authority account has more than one observed member.");
+            return CreateResult();
+        }
+
+        if (blockingReasons.Count > 0)
+        {
             return CreateResult();
         }
 
@@ -128,5 +137,42 @@ public static class MovePreviewPlanner
                 actions.ToArray(),
                 skips.ToArray(),
                 blockingReasons.ToArray());
+    }
+
+    private static void AddManagedMetadataBlockingReasons(
+        MovePreviewMember[] members,
+        ICollection<string> blockingReasons)
+    {
+        var managedCopies = members.Where(member => member.IsManagedCopy).ToArray();
+        if (managedCopies.Length == 0)
+        {
+            return;
+        }
+
+        if (managedCopies.Any(member =>
+                string.IsNullOrWhiteSpace(member.ManagedSyncGroupId)
+                || string.IsNullOrWhiteSpace(member.ManagedSourceAccountId)))
+        {
+            blockingReasons.Add("Managed-copy identity is incomplete; Move is blocked.");
+            return;
+        }
+
+        var syncGroupCount = managedCopies
+            .Select(member => member.ManagedSyncGroupId!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (syncGroupCount > 1)
+        {
+            blockingReasons.Add("Managed copies disagree about their sync group; Move is blocked.");
+        }
+
+        var sourceAccountCount = managedCopies
+            .Select(member => member.ManagedSourceAccountId!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (sourceAccountCount > 1)
+        {
+            blockingReasons.Add("Managed copies disagree about their recorded source account; Move is blocked.");
+        }
     }
 }

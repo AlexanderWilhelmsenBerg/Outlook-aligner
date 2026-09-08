@@ -426,12 +426,24 @@ public sealed class MainViewModel : ObservableObject
         {
             SelectedAuthority = AuthorityChoices.FirstOrDefault(choice =>
                 string.Equals(choice.AccountKey, savedAccountKey, StringComparison.OrdinalIgnoreCase));
+            return;
         }
 
-        if (SelectedAuthority is null)
+        var resolved = AuthorityResolver.Resolve(group.Group);
+        if (resolved.Reason == AuthorityReason.KnownOrigin && resolved.AuthorityAccountKey is not null)
         {
-            AuthorityStatus = "Authority is unknown. Choose the account that should control alignment.";
+            var knownOrigin = AuthorityChoices.FirstOrDefault(choice =>
+                string.Equals(choice.AccountKey, resolved.AuthorityAccountKey, StringComparison.OrdinalIgnoreCase));
+            if (knownOrigin is not null)
+            {
+                _selectedAuthority = knownOrigin;
+                OnPropertyChanged(nameof(SelectedAuthority));
+                AuthorityStatus = $"Authority: {knownOrigin.AccountKey} · Known origin from validated Outlook Aligner copy metadata.";
+                return;
+            }
         }
+
+        AuthorityStatus = "Authority is unknown. Choose the account that should control alignment.";
     }
 
     private void UpdateMovePreview()
@@ -466,7 +478,9 @@ public sealed class MainViewModel : ObservableObject
                 member.EndLocal,
                 member.IsAllDay,
                 member.IsRecurring,
-                member.IsManagedCopy)));
+                member.IsManagedCopy,
+                member.ManagedSyncGroupId,
+                member.ManagedSourceAccountId)));
 
         MovePreviewStatus = preview.BlockingReasons.Count > 0
             ? "Move Selected preview is blocked by a safety rule."
@@ -599,6 +613,7 @@ public sealed class MainViewModel : ObservableObject
             AlignmentState.RecurrenceIdentityUnresolved => "Authority is disabled until recurrence identity is proven.",
             AlignmentState.Uncorrelated => "Authority is disabled because this item is not safely correlated.",
             AlignmentState.Duplicate => "Authority is disabled while duplicate copies are unresolved.",
+            AlignmentState.Conflict => "Authority is disabled while managed-copy provenance is conflicting.",
             _ => "Authority cannot be selected for this logical event yet.",
         };
 }

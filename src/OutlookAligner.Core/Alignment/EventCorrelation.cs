@@ -123,6 +123,8 @@ public static class EventCorrelation
             || !string.Equals(member.BusyStatus, first.BusyStatus, StringComparison.Ordinal)
             || !string.Equals(member.Sensitivity, first.Sensitivity, StringComparison.Ordinal));
 
+        var managedConflict = GetManagedMetadataConflict(members);
+
         AlignmentState state;
         string explanation;
 
@@ -130,6 +132,11 @@ public static class EventCorrelation
         {
             state = AlignmentState.Duplicate;
             explanation = $"More than one correlated item exists in: {string.Join(", ", duplicateAccounts)}.";
+        }
+        else if (managedConflict is not null)
+        {
+            state = AlignmentState.Conflict;
+            explanation = managedConflict;
         }
         else if (missingAccounts.Length > 0)
         {
@@ -179,6 +186,42 @@ public static class EventCorrelation
             TimesDiffer: false,
             DetailsDiffer: false,
             explanation);
+
+    private static string? GetManagedMetadataConflict(ObservedCalendarEvent[] members)
+    {
+        var managedCopies = members.Where(member => member.IsManagedCopy).ToArray();
+        if (managedCopies.Length == 0)
+        {
+            return null;
+        }
+
+        if (managedCopies.Any(member =>
+                string.IsNullOrWhiteSpace(member.ManagedSourceAccountId)
+                || string.IsNullOrWhiteSpace(member.ManagedSyncGroupId)))
+        {
+            return "Validated managed-copy input is incomplete; alignment actions are blocked.";
+        }
+
+        var sourceAccounts = managedCopies
+            .Select(member => member.ManagedSourceAccountId!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (sourceAccounts.Length > 1)
+        {
+            return "Managed copies disagree about their recorded source account; alignment actions are blocked.";
+        }
+
+        var syncGroupIds = managedCopies
+            .Select(member => member.ManagedSyncGroupId!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (syncGroupIds.Length > 1)
+        {
+            return "Managed copies disagree about their sync group; alignment actions are blocked.";
+        }
+
+        return null;
+    }
 
     private static string? GetCorrelationGlobalAppointmentId(ObservedCalendarEvent item)
     {

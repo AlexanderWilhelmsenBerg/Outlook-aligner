@@ -116,6 +116,46 @@ public sealed class MovePreviewPlannerTests
         Assert.Contains(preview.BlockingReasons, reason => reason.Contains("authority account has no observed member", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void ConflictingManagedSyncGroupsBlockMovePreview()
+    {
+        var preview = MovePreviewPlanner.Build(
+            "group",
+            "authority@example.invalid",
+            [
+                Member("authority@example.invalid", "authority", 9, 10, managed: false),
+                Member("copy-one@example.invalid", "copy-one", 11, 12, managed: true),
+                Member("copy-two@example.invalid", "copy-two", 11, 12, managed: true) with
+                {
+                    ManagedSyncGroupId = "22222222-2222-2222-2222-222222222222",
+                },
+            ]);
+
+        Assert.False(preview.CanExecute);
+        Assert.Empty(preview.Actions);
+        Assert.Contains(preview.BlockingReasons, reason => reason.Contains("sync group", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ConflictingManagedSourceAccountsBlockMovePreview()
+    {
+        var preview = MovePreviewPlanner.Build(
+            "group",
+            "authority@example.invalid",
+            [
+                Member("authority@example.invalid", "authority", 9, 10, managed: false),
+                Member("copy-one@example.invalid", "copy-one", 11, 12, managed: true),
+                Member("copy-two@example.invalid", "copy-two", 11, 12, managed: true) with
+                {
+                    ManagedSourceAccountId = "other-source@example.invalid",
+                },
+            ]);
+
+        Assert.False(preview.CanExecute);
+        Assert.Empty(preview.Actions);
+        Assert.Contains(preview.BlockingReasons, reason => reason.Contains("source account", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static MovePreviewMember Member(
         string account,
         string locator,
@@ -129,5 +169,7 @@ public sealed class MovePreviewPlannerTests
             new DateTime(2026, 9, 8, endHour, 0, 0),
             IsAllDay: false,
             IsRecurring: false,
-            IsManagedCopy: managed);
+            IsManagedCopy: managed,
+            ManagedSyncGroupId: managed ? "11111111-1111-1111-1111-111111111111" : null,
+            ManagedSourceAccountId: managed ? "authority@example.invalid" : null);
 }

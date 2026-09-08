@@ -69,6 +69,7 @@ public sealed class AlignmentGroupViewModel
         => Group.State is not AlignmentState.RecurrenceIdentityUnresolved
             and not AlignmentState.Uncorrelated
             and not AlignmentState.Duplicate
+            and not AlignmentState.Conflict
             && Group.Members.Count > 0;
 }
 
