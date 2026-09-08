@@ -55,7 +55,13 @@ public sealed class AlignmentGroupViewModel
         Group.Members
             .OrderBy(member => member.AccountKey, StringComparer.OrdinalIgnoreCase)
             .ThenBy(member => member.StartLocal)
-            .Select(member => $"{member.AccountKey}: {member.StartLocal:g} – {member.EndLocal:g}"));
+            .Select(member =>
+            {
+                var managed = member.IsManagedCopy
+                    ? $" · managed {member.ManagedCopyType ?? "copy"}"
+                    : string.Empty;
+                return $"{member.AccountKey}: {member.StartLocal:g} – {member.EndLocal:g}{managed}";
+            }));
 
     public bool NeedsAttention => Group.State != AlignmentState.Aligned;
 

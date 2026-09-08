@@ -25,6 +25,8 @@ public sealed class MainViewModel : ObservableObject
     private string _selectedEventDiagnostics = "Select a calendar item to inspect its Outlook identity.";
     private string _alignmentSummary = "Refresh Outlook to build the alignment view.";
     private string _authorityStatus = "Select a logical event to inspect authority.";
+    private string _movePreviewStatus = "Select a logical event and authority to preview Move Selected.";
+    private string _movePreviewDetails = "No Move Selected preview yet.";
     private string _noticeMessage = string.Empty;
 
     public MainViewModel()
@@ -78,6 +80,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             UpdateAuthorityChoices();
+            UpdateMovePreview();
         }
     }
 
@@ -107,6 +110,7 @@ public sealed class MainViewModel : ObservableObject
             if (group is null)
             {
                 AuthorityStatus = "Select a logical event to inspect authority.";
+                UpdateMovePreview();
                 return;
             }
 
@@ -115,11 +119,13 @@ public sealed class MainViewModel : ObservableObject
                 AuthorityStatus = group.CanChooseAuthority
                     ? "Authority is unknown. Choose the account that should control alignment."
                     : BuildUnavailableAuthorityStatus(group);
+                UpdateMovePreview();
                 return;
             }
 
             _authorityByGroupKey[group.GroupKey] = value.AccountKey;
             AuthorityStatus = $"Authority: {value.AccountKey} · User selected for this session.";
+            UpdateMovePreview();
         }
     }
 
@@ -185,6 +191,18 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _authorityStatus;
         private set => SetProperty(ref _authorityStatus, value);
+    }
+
+    public string MovePreviewStatus
+    {
+        get => _movePreviewStatus;
+        private set => SetProperty(ref _movePreviewStatus, value);
+    }
+
+    public string MovePreviewDetails
+    {
+        get => _movePreviewDetails;
+        private set => SetProperty(ref _movePreviewDetails, value);
     }
 
     public string NoticeMessage
@@ -416,6 +434,56 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private void UpdateMovePreview()
+    {
+        var group = SelectedAlignmentGroup;
+        var authority = SelectedAuthority;
+        if (group is null)
+        {
+            MovePreviewStatus = "Select a logical event and authority to preview Move Selected.";
+            MovePreviewDetails = "No Move Selected preview yet.";
+            return;
+        }
+
+        if (authority is null)
+        {
+            MovePreviewStatus = group.CanChooseAuthority
+                ? "Choose an authoritative account to build the Move Selected preview."
+                : "Move Selected preview is unavailable for this logical event.";
+            MovePreviewDetails = group.CanChooseAuthority
+                ? "No Outlook changes are planned until authority is explicit."
+                : BuildUnavailableAuthorityStatus(group);
+            return;
+        }
+
+        var preview = MovePreviewPlanner.Build(
+            group.GroupKey,
+            authority.AccountKey,
+            group.Group.Members.Select(member => new MovePreviewMember(
+                member.AccountKey,
+                member.LocatorKey,
+                member.StartLocal,
+                member.EndLocal,
+                member.IsAllDay,
+                member.IsRecurring,
+                member.IsManagedCopy)));
+
+        MovePreviewStatus = preview.BlockingReasons.Count > 0
+            ? "Move Selected preview is blocked by a safety rule."
+            : preview.Actions.Count > 0
+                ? $"Preview: {preview.Actions.Count} managed cop{(preview.Actions.Count == 1 ? "y" : "ies")} would move."
+                : "Preview: no managed copy needs a move.";
+
+        var lines = new List<string>();
+        lines.AddRange(preview.BlockingReasons.Select(reason => "BLOCKED · " + reason));
+        lines.AddRange(preview.Actions.Select(action =>
+            $"MOVE · {action.AccountKey}: {action.CurrentStartLocal:g} – {action.CurrentEndLocal:g} → {action.TargetStartLocal:g} – {action.TargetEndLocal:g}"));
+        lines.AddRange(preview.Skips.Select(skip => $"SKIP · {skip.AccountKey}: {skip.Reason}"));
+        MovePreviewDetails = lines.Count == 0
+            ? "Nothing would change."
+            : string.Join(Environment.NewLine, lines);
+    }
+
     private void RebuildAlignmentGroups(
         OutlookProbeResult result,
         CalendarEventRowViewModel[] eventRows)
@@ -425,18 +493,28 @@ public sealed class MainViewModel : ObservableObject
             .Select(account => account.SmtpAddress!)
             .ToArray();
 
-        var observations = eventRows.Select(row => new ObservedCalendarEvent(
-            row.Account.SmtpAddress ?? row.Account.DisplayName,
-            row.CalendarEvent.EntryId ?? $"unlocated:{row.CalendarEvent.StartLocal:O}:{row.Subject}",
-            row.CalendarEvent.GlobalAppointmentId,
-            row.CalendarEvent.StartLocal,
-            row.CalendarEvent.EndLocal,
-            row.CalendarEvent.IsAllDay,
-            row.CalendarEvent.IsRecurring,
-            row.CalendarEvent.BusyStatus,
-            row.CalendarEvent.Sensitivity,
-            row.CalendarEvent.Subject,
-            row.CalendarEvent.Location));
+        var observations = eventRows.Select(row =>
+        {
+            var managed = row.CalendarEvent.ManagedCopy;
+            var isManagedCopy = managed?.State == ManagedCopyState.Valid;
+            return new ObservedCalendarEvent(
+                row.Account.SmtpAddress ?? row.Account.DisplayName,
+                row.CalendarEvent.EntryId ?? $"unlocated:{row.CalendarEvent.StartLocal:O}:{row.Subject}",
+                row.CalendarEvent.GlobalAppointmentId,
+                row.CalendarEvent.StartLocal,
+                row.CalendarEvent.EndLocal,
+                row.CalendarEvent.IsAllDay,
+                row.CalendarEvent.IsRecurring,
+                row.CalendarEvent.BusyStatus,
+                row.CalendarEvent.Sensitivity,
+                row.CalendarEvent.Subject,
+                row.CalendarEvent.Location,
+                IsManagedCopy: isManagedCopy,
+                ManagedSourceGlobalAppointmentId: isManagedCopy ? managed!.SourceGlobalAppointmentId : null,
+                ManagedSyncGroupId: isManagedCopy ? managed!.SyncGroupId : null,
+                ManagedSourceAccountId: isManagedCopy ? managed!.SourceAccountId : null,
+                ManagedCopyType: isManagedCopy ? managed!.CopyType : null);
+        });
 
         var groups = EventCorrelation.BuildGroups(observations, expectedAccounts);
 
@@ -479,11 +557,16 @@ public sealed class MainViewModel : ObservableObject
     {
         var accountLines = result.Accounts.Select(account =>
             $"{account.DisplayName}: {account.EventCount} events; calendar={(account.CalendarAvailable ? "available" : "unavailable")}; error={account.Error ?? "none"}");
+        var allEvents = result.Accounts.SelectMany(account => account.Events).ToArray();
+        var validManagedCopies = allEvents.Count(calendarEvent => calendarEvent.ManagedCopy?.State == ManagedCopyState.Valid);
+        var metadataIssues = allEvents.Count(calendarEvent => calendarEvent.ManagedCopy?.State is
+            ManagedCopyState.Incomplete or ManagedCopyState.UnsupportedSchema or ManagedCopyState.Unreadable);
+        var metadataLine = $"Managed-copy metadata: {validManagedCopies} valid managed copies; {metadataIssues} invalid/unreadable metadata items.";
         var warningLines = result.Warnings.Count == 0
             ? ["Warnings: none"]
             : result.Warnings.Select(warning => "Warning: " + warning);
 
-        return string.Join(Environment.NewLine, accountLines.Concat(warningLines));
+        return string.Join(Environment.NewLine, accountLines.Append(metadataLine).Concat(warningLines));
     }
 
     private static string BuildSelectedEventDiagnostics(CalendarEventRowViewModel? selectedEvent)
@@ -493,6 +576,7 @@ public sealed class MainViewModel : ObservableObject
             return "No calendar item is selected.";
         }
 
+        var managed = selectedEvent.CalendarEvent.ManagedCopy;
         return string.Join(
             Environment.NewLine,
             $"Subject: {selectedEvent.Subject}",
@@ -500,7 +584,13 @@ public sealed class MainViewModel : ObservableObject
             $"GlobalAppointmentID: {selectedEvent.CalendarEvent.GlobalAppointmentId ?? "(unavailable)"}",
             $"EntryID: {selectedEvent.CalendarEvent.EntryId ?? "(unavailable)"}",
             $"StoreID: {selectedEvent.Account.StoreId ?? "(unavailable)"}",
-            $"Recurrence: {selectedEvent.RecurrenceDisplay}");
+            $"Recurrence: {selectedEvent.RecurrenceDisplay}",
+            $"Managed-copy state: {managed?.State.ToString() ?? ManagedCopyState.None.ToString()}",
+            $"Managed SyncGroupId: {managed?.SyncGroupId ?? "(none)"}",
+            $"Managed source GlobalAppointmentID: {managed?.SourceGlobalAppointmentId ?? "(none)"}",
+            $"Managed source account: {managed?.SourceAccountId ?? "(none)"}",
+            $"Managed copy type: {managed?.CopyType ?? "(none)"}",
+            $"Managed schema: {managed?.SchemaVersion ?? "(none)"}");
     }
 
     private static string BuildUnavailableAuthorityStatus(AlignmentGroupViewModel group)

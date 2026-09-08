@@ -23,7 +23,12 @@ public sealed record ObservedCalendarEvent(
     string BusyStatus,
     string Sensitivity,
     string? Subject,
-    string? Location);
+    string? Location,
+    bool IsManagedCopy = false,
+    string? ManagedSourceGlobalAppointmentId = null,
+    string? ManagedSyncGroupId = null,
+    string? ManagedSourceAccountId = null,
+    string? ManagedCopyType = null);
 
 public sealed record LogicalEventGroup(
     string GroupKey,
@@ -58,21 +63,23 @@ public static class EventCorrelation
             results.Add(CreateUnresolvedGroup(
                 observation,
                 AlignmentState.RecurrenceIdentityUnresolved,
-                "Recurring occurrence identity has not been proven yet, so this item is deliberately not correlated by GlobalAppointmentID alone."));
+                "Recurring occurrence identity has not been proven yet, so this item is deliberately not correlated by meeting identity alone."));
         }
 
         foreach (var observation in observations.Where(item =>
-                     !item.IsRecurring && string.IsNullOrWhiteSpace(item.GlobalAppointmentId)))
+                     !item.IsRecurring && string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item))))
         {
             results.Add(CreateUnresolvedGroup(
                 observation,
                 AlignmentState.Uncorrelated,
-                "The item has no GlobalAppointmentID and cannot be safely correlated yet."));
+                observation.IsManagedCopy
+                    ? "The managed copy is missing its validated source GlobalAppointmentID and cannot be safely correlated."
+                    : "The item has no GlobalAppointmentID and cannot be safely correlated yet."));
         }
 
         var correlated = observations
-            .Where(item => !item.IsRecurring && !string.IsNullOrWhiteSpace(item.GlobalAppointmentId))
-            .GroupBy(item => item.GlobalAppointmentId!, StringComparer.Ordinal)
+            .Where(item => !item.IsRecurring && !string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item)))
+            .GroupBy(item => GetCorrelationGlobalAppointmentId(item)!, StringComparer.Ordinal)
             .Select(group => BuildCorrelatedGroup(group.Key, group.ToArray(), expectedAccounts));
 
         results.AddRange(correlated);
@@ -84,7 +91,7 @@ public static class EventCorrelation
     }
 
     private static LogicalEventGroup BuildCorrelatedGroup(
-        string globalAppointmentId,
+        string correlationGlobalAppointmentId,
         ObservedCalendarEvent[] members,
         string[] expectedAccounts)
     {
@@ -149,7 +156,7 @@ public static class EventCorrelation
         }
 
         return new LogicalEventGroup(
-            $"gaid:{globalAppointmentId}",
+            $"gaid:{correlationGlobalAppointmentId}",
             PickDisplaySubject(members),
             state,
             members,
@@ -172,6 +179,19 @@ public static class EventCorrelation
             TimesDiffer: false,
             DetailsDiffer: false,
             explanation);
+
+    private static string? GetCorrelationGlobalAppointmentId(ObservedCalendarEvent item)
+    {
+        if (item.IsManagedCopy)
+        {
+            return Normalize(item.ManagedSourceGlobalAppointmentId);
+        }
+
+        return Normalize(item.GlobalAppointmentId);
+    }
+
+    private static string? Normalize(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static string PickDisplaySubject(ObservedCalendarEvent[] members)
         => members
