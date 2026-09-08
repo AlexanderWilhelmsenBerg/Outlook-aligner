@@ -3,6 +3,7 @@ using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using OutlookAligner.App.Services;
+using OutlookAligner.Core.Alignment;
 using OutlookAligner.Outlook.Contracts;
 
 namespace OutlookAligner.App.ViewModels;
@@ -17,6 +18,7 @@ public sealed class MainViewModel : ObservableObject
     private string _status = "Ready to read Classic Outlook.";
     private string _forwardCapability = "Not checked";
     private string _lastDiagnostics = "No diagnostics yet.";
+    private string _alignmentSummary = "Refresh Outlook to build the alignment view.";
 
     public MainViewModel()
     {
@@ -30,6 +32,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<OutlookAccountChoice> Accounts { get; } = [];
 
     public ObservableCollection<OutlookAccountChoice> TargetAccounts { get; } = [];
+
+    public ObservableCollection<AlignmentGroupViewModel> AlignmentGroups { get; } = [];
 
     public AsyncRelayCommand RefreshCommand { get; }
 
@@ -105,6 +109,12 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _lastDiagnostics, value);
     }
 
+    public string AlignmentSummary
+    {
+        get => _alignmentSummary;
+        private set => SetProperty(ref _alignmentSummary, value);
+    }
+
     private async Task RefreshAsync()
     {
         IsBusy = true;
@@ -126,13 +136,15 @@ public sealed class MainViewModel : ObservableObject
             var eventRows = result.Accounts
                 .SelectMany(account => account.Events.Select(calendarEvent => new CalendarEventRowViewModel(account, calendarEvent)))
                 .OrderBy(row => row.CalendarEvent.StartLocal)
-                .ThenBy(row => row.Subject, StringComparer.CurrentCultureIgnoreCase);
+                .ThenBy(row => row.Subject, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
 
             foreach (var eventRow in eventRows)
             {
                 Events.Add(eventRow);
             }
 
+            RebuildAlignmentGroups(result, eventRows);
             SelectedEvent = Events.FirstOrDefault();
             LastDiagnostics = BuildScanDiagnostics(result);
             Status = $"Loaded {Events.Count} events from {Accounts.Count} Outlook accounts for {days} days.";
@@ -141,6 +153,7 @@ public sealed class MainViewModel : ObservableObject
         {
             Status = "Outlook refresh failed. Open Diagnostics for details.";
             LastDiagnostics = exception.Message;
+            AlignmentSummary = "Alignment could not be rebuilt because Outlook refresh failed.";
         }
         finally
         {
@@ -260,6 +273,43 @@ public sealed class MainViewModel : ObservableObject
         SelectedTargetAccount = TargetAccounts.FirstOrDefault(account =>
                                     string.Equals(account.SmtpAddress, previousSmtp, StringComparison.OrdinalIgnoreCase))
                                 ?? TargetAccounts.FirstOrDefault();
+    }
+
+    private void RebuildAlignmentGroups(
+        OutlookProbeResult result,
+        IReadOnlyList<CalendarEventRowViewModel> eventRows)
+    {
+        var expectedAccounts = result.Accounts
+            .Where(account => account.CalendarAvailable && !string.IsNullOrWhiteSpace(account.SmtpAddress))
+            .Select(account => account.SmtpAddress!)
+            .ToArray();
+
+        var observations = eventRows.Select(row => new ObservedCalendarEvent(
+            row.Account.SmtpAddress ?? row.Account.DisplayName,
+            row.CalendarEvent.EntryId ?? $"unlocated:{row.CalendarEvent.StartLocal:O}:{row.Subject}",
+            row.CalendarEvent.GlobalAppointmentId,
+            row.CalendarEvent.StartLocal,
+            row.CalendarEvent.EndLocal,
+            row.CalendarEvent.IsAllDay,
+            row.CalendarEvent.IsRecurring,
+            row.CalendarEvent.BusyStatus,
+            row.CalendarEvent.Sensitivity,
+            row.CalendarEvent.Subject,
+            row.CalendarEvent.Location));
+
+        var groups = EventCorrelation.BuildGroups(observations, expectedAccounts);
+
+        AlignmentGroups.Clear();
+        foreach (var group in groups
+                     .OrderBy(group => group.State == AlignmentState.Aligned)
+                     .ThenBy(group => group.Members.Min(member => member.StartLocal)))
+        {
+            AlignmentGroups.Add(new AlignmentGroupViewModel(group));
+        }
+
+        var attention = groups.Count(group => group.State != AlignmentState.Aligned);
+        var aligned = groups.Count - attention;
+        AlignmentSummary = $"{groups.Count} logical rows: {attention} need attention, {aligned} currently aligned. Recurring items remain deliberately unresolved.";
     }
 
     private void NotifyCommandStateChanged()
