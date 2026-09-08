@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using OutlookAligner.OutlookHost.Com;
 using OutlookInterop = Microsoft.Office.Interop.Outlook;
@@ -7,6 +9,7 @@ namespace OutlookAligner.OutlookHost.Forwarding;
 internal static class NativeMeetingForwardSpike
 {
     private const int MaximumMeetingRequestsPerFolder = 5000;
+    private const string CalendarForwardCommandId = "Forward";
 
     internal static ForwardSpikeResult Run(ForwardSpikeOptions options)
     {
@@ -46,6 +49,17 @@ internal static class NativeMeetingForwardSpike
                 return Failure(
                     5,
                     "The selected source account has no accessible delivery store.",
+                    options,
+                    searchedFolders,
+                    candidates,
+                    warnings);
+            }
+
+            if (options.Action == ForwardSpikeAction.ProbeCalendarCommand)
+            {
+                return ProbeCalendarForwardCommand(
+                    session,
+                    deliveryStore,
                     options,
                     searchedFolders,
                     candidates,
@@ -171,6 +185,194 @@ internal static class NativeMeetingForwardSpike
         }
 
         return match;
+    }
+
+    private static ForwardSpikeResult ProbeCalendarForwardCommand(
+        OutlookInterop.NameSpace session,
+        OutlookInterop.Store deliveryStore,
+        ForwardSpikeOptions options,
+        List<string> searchedFolders,
+        List<ForwardCandidateInfo> candidates,
+        List<string> warnings)
+    {
+        object? sourceObject = null;
+        OutlookInterop.AppointmentItem? appointment = null;
+        OutlookInterop.Inspector? inspector = null;
+        object? commandBars = null;
+
+        try
+        {
+            sourceObject = session.GetItemFromID(options.CalendarEntryId!, deliveryStore.StoreID);
+            appointment = sourceObject as OutlookInterop.AppointmentItem;
+            if (appointment is null)
+            {
+                return Failure(
+                    5,
+                    "The requested Calendar EntryID did not reopen as an AppointmentItem in the selected source store.",
+                    options,
+                    searchedFolders,
+                    candidates,
+                    warnings);
+            }
+
+            if (!string.Equals(
+                    appointment.GlobalAppointmentID,
+                    options.GlobalAppointmentId,
+                    StringComparison.Ordinal))
+            {
+                return Failure(
+                    5,
+                    "The reopened AppointmentItem GlobalAppointmentID did not match the requested meeting. The command probe stopped without invoking any Outlook command.",
+                    options,
+                    searchedFolders,
+                    candidates,
+                    warnings);
+            }
+
+            if (appointment.MeetingStatus == OutlookInterop.OlMeetingStatus.olNonMeeting)
+            {
+                return Failure(
+                    5,
+                    "The requested Calendar item is not a meeting, so native meeting Forward capability is not applicable.",
+                    options,
+                    searchedFolders,
+                    candidates,
+                    warnings);
+            }
+
+            inspector = appointment.GetInspector;
+            inspector.Display(false);
+
+            commandBars = GetComProperty(inspector, "CommandBars");
+            if (commandBars is null)
+            {
+                return Failure(
+                    5,
+                    "The Outlook appointment Inspector did not expose its built-in command surface. No command was executed.",
+                    options,
+                    searchedFolders,
+                    candidates,
+                    warnings);
+            }
+
+            var commandProbe = ProbeMsoCommand(commandBars, CalendarForwardCommandId, warnings);
+            var subjectSuffix = options.IncludeDetails
+                ? $" Subject: {appointment.Subject ?? "(no subject)"}."
+                : string.Empty;
+
+            var summary = commandProbe.IdentifierValid
+                ? $"The built-in Outlook command '{CalendarForwardCommandId}' resolved for the accepted Calendar appointment. Visible={commandProbe.Visible}; Enabled={commandProbe.Enabled}. The command was not executed.{subjectSuffix}"
+                : $"The built-in Outlook command identifier '{CalendarForwardCommandId}' did not resolve in this appointment Inspector. The command was not executed.{subjectSuffix}";
+
+            return Success(
+                summary,
+                options,
+                searchedFolders,
+                candidates,
+                warnings,
+                commandProbe);
+        }
+        finally
+        {
+            ComRelease.Release(commandBars);
+
+            if (inspector is not null)
+            {
+                try
+                {
+                    inspector.Close(OutlookInterop.OlInspectorClose.olDiscard);
+                }
+                catch (COMException exception)
+                {
+                    warnings.Add($"The temporary appointment Inspector could not be closed cleanly (HRESULT 0x{exception.ErrorCode:X8}).");
+                }
+            }
+
+            ComRelease.Release(inspector);
+
+            if (!ReferenceEquals(sourceObject, appointment))
+            {
+                ComRelease.Release(sourceObject);
+            }
+
+            ComRelease.Release(appointment);
+        }
+    }
+
+    private static ForwardCommandProbeInfo ProbeMsoCommand(
+        object commandBars,
+        string commandId,
+        List<string> warnings)
+    {
+        string? label;
+        try
+        {
+            label = InvokeComMethod(commandBars, "GetLabelMso", commandId) as string;
+        }
+        catch (Exception exception) when (TryGetComException(exception, out var comException))
+        {
+            warnings.Add($"Built-in command '{commandId}' could not be resolved (HRESULT 0x{comException.ErrorCode:X8}).");
+            return new ForwardCommandProbeInfo(commandId, false, null, false, false);
+        }
+
+        var visible = ReadMsoBoolean(commandBars, "GetVisibleMso", commandId, warnings);
+        var enabled = ReadMsoBoolean(commandBars, "GetEnabledMso", commandId, warnings);
+
+        return new ForwardCommandProbeInfo(commandId, true, label, visible, enabled);
+    }
+
+    private static bool ReadMsoBoolean(
+        object commandBars,
+        string methodName,
+        string commandId,
+        List<string> warnings)
+    {
+        try
+        {
+            var value = InvokeComMethod(commandBars, methodName, commandId);
+            return value is bool boolean && boolean;
+        }
+        catch (Exception exception) when (TryGetComException(exception, out var comException))
+        {
+            warnings.Add($"{methodName} failed for built-in command '{commandId}' (HRESULT 0x{comException.ErrorCode:X8}).");
+            return false;
+        }
+    }
+
+    private static object? GetComProperty(object target, string propertyName)
+        => target.GetType().InvokeMember(
+            propertyName,
+            BindingFlags.GetProperty,
+            binder: null,
+            target,
+            args: null,
+            CultureInfo.InvariantCulture);
+
+    private static object? InvokeComMethod(object target, string methodName, params object?[] arguments)
+        => target.GetType().InvokeMember(
+            methodName,
+            BindingFlags.InvokeMethod,
+            binder: null,
+            target,
+            arguments,
+            CultureInfo.InvariantCulture);
+
+    private static bool TryGetComException(Exception exception, out COMException comException)
+    {
+        if (exception is COMException direct)
+        {
+            comException = direct;
+            return true;
+        }
+
+        if (exception is TargetInvocationException { InnerException: COMException inner })
+        {
+            comException = inner;
+            return true;
+        }
+
+        comException = null!;
+        return false;
     }
 
     private static void SearchFolder(
@@ -357,7 +559,8 @@ internal static class NativeMeetingForwardSpike
         ForwardSpikeOptions options,
         List<string> searchedFolders,
         List<ForwardCandidateInfo> candidates,
-        List<string> warnings)
+        List<string> warnings,
+        ForwardCommandProbeInfo? commandProbe = null)
         => new(
             0,
             summary,
@@ -367,6 +570,7 @@ internal static class NativeMeetingForwardSpike
             options.Recipient,
             searchedFolders,
             candidates,
+            commandProbe,
             warnings);
 
     private static ForwardSpikeResult Failure(
@@ -385,5 +589,6 @@ internal static class NativeMeetingForwardSpike
             options.Recipient,
             searchedFolders,
             candidates,
+            null,
             warnings);
 }
