@@ -162,7 +162,7 @@
                                 <TextBlock
                                     MaxWidth="850"
                                     Opacity="0.7"
-                                    Text="Select a logical meeting to inspect copies and choose authority. Recurring occurrences stay explicitly unresolved until recurrence identity is proven."
+                                    Text="Select a logical meeting to inspect copies, choose authority, and preview safe alignment actions. Recurring occurrences stay explicitly unresolved until recurrence identity is proven."
                                     TextWrapping="Wrap" />
                             </StackPanel>
                             <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="Refresh Outlook" VerticalAlignment="Center" />
@@ -245,7 +245,21 @@
                                     <TextBlock Opacity="0.75" Text="{Binding AuthorityStatus}" TextWrapping="Wrap" />
                                     <TextBlock
                                         Opacity="0.65"
-                                        Text="Authority selection is session-only in this slice and does not modify Outlook. It is the prerequisite for future Copy/Move previews."
+                                        Text="Authority selection is session-only and does not modify Outlook."
+                                        TextWrapping="Wrap" />
+
+                                    <TextBlock Margin="0,10,0,0" FontWeight="SemiBold" Text="Move Selected preview" />
+                                    <TextBlock Opacity="0.8" Text="{Binding MovePreviewStatus}" TextWrapping="Wrap" />
+                                    <TextBox
+                                        IsReadOnly="True"
+                                        AcceptsReturn="True"
+                                        MinHeight="90"
+                                        FontFamily="Consolas"
+                                        Text="{Binding MovePreviewDetails}"
+                                        TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.65"
+                                        Text="Preview only. This Phase 3 slice has no Move write command. Only validated Outlook Aligner-managed copies can ever appear as MOVE candidates."
                                         TextWrapping="Wrap" />
                                 </StackPanel>
                             </ScrollViewer>
