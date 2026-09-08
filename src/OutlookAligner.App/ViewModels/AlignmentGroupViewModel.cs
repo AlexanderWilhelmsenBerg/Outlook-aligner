@@ -11,6 +11,8 @@ public sealed class AlignmentGroupViewModel
 
     public LogicalEventGroup Group { get; }
 
+    public string GroupKey => Group.GroupKey;
+
     public string Subject => Group.DisplaySubject;
 
     public string State => Group.State switch
@@ -26,6 +28,10 @@ public sealed class AlignmentGroupViewModel
         => string.Join(" · ", Group.Members
             .Select(member => member.AccountKey)
             .Distinct(StringComparer.OrdinalIgnoreCase));
+
+    public string MissingSummary => Group.MissingAccountKeys.Count == 0
+        ? "None"
+        : string.Join(", ", Group.MissingAccountKeys);
 
     public string TimeSummary
     {
@@ -44,5 +50,23 @@ public sealed class AlignmentGroupViewModel
         }
     }
 
+    public string MemberDetails => string.Join(
+        Environment.NewLine,
+        Group.Members
+            .OrderBy(member => member.AccountKey, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(member => member.StartLocal)
+            .Select(member => $"{member.AccountKey}: {member.StartLocal:g} – {member.EndLocal:g}"));
+
     public bool NeedsAttention => Group.State != AlignmentState.Aligned;
+
+    public bool CanChooseAuthority
+        => Group.State is not AlignmentState.RecurrenceIdentityUnresolved
+            and not AlignmentState.Uncorrelated
+            and not AlignmentState.Duplicate
+            && Group.Members.Count > 0;
+}
+
+public sealed record AuthorityChoice(string AccountKey)
+{
+    public string DisplayName => AccountKey;
 }
