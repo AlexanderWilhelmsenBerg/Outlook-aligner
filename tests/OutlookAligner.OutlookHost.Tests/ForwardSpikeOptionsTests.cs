@@ -119,6 +119,69 @@ public sealed class ForwardSpikeOptionsTests
     }
 
     [Fact]
+    public void CalendarSendRequiresExactCalendarConfirmationToken()
+    {
+        var parsed = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--send-calendar-command",
+                "--entry-id", "calendar-entry-id",
+                "--to", "target@example.invalid",
+                "--confirm-calendar-send", ForwardSpikeOptions.CalendarConfirmationToken,
+            ],
+            out var options,
+            out var error);
+
+        Assert.True(parsed);
+        Assert.Null(error);
+        Assert.Equal(ForwardSpikeAction.SendCalendarCommand, options.Action);
+        Assert.Equal("calendar-entry-id", options.CalendarEntryId);
+        Assert.Equal("target@example.invalid", options.Recipient);
+    }
+
+    [Fact]
+    public void CalendarSendWithoutConfirmationIsRejected()
+    {
+        var parsed = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--send-calendar-command",
+                "--entry-id", "calendar-entry-id",
+                "--to", "target@example.invalid",
+            ],
+            out _,
+            out var error);
+
+        Assert.False(parsed);
+        Assert.Contains("--confirm-calendar-send", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CalendarSendRejectsRetainedRequestConfirmationSwitch()
+    {
+        var parsed = ForwardSpikeOptions.TryParse(
+            [
+                "--forward-spike",
+                "--source-smtp", "source@example.invalid",
+                "--global-id", "global-id",
+                "--send-calendar-command",
+                "--entry-id", "calendar-entry-id",
+                "--to", "target@example.invalid",
+                "--confirm-send", ForwardSpikeOptions.ConfirmationToken,
+                "--confirm-calendar-send", ForwardSpikeOptions.CalendarConfirmationToken,
+            ],
+            out _,
+            out var error);
+
+        Assert.False(parsed);
+        Assert.Equal("--confirm-send is valid only together with --send.", error);
+    }
+
+    [Fact]
     public void CalendarCommandModeWithoutEntryIdIsRejected()
     {
         var parsed = ForwardSpikeOptions.TryParse(
