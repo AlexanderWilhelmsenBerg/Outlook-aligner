@@ -35,13 +35,19 @@ Inspect whether Outlook still retains the native meeting request:
 .\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID
 ```
 
-Or non-destructively probe the accepted Calendar appointment's built-in Outlook Forward command without executing Forward:
+Non-destructively probe the accepted Calendar appointment's built-in Outlook Forward command without executing Forward:
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID --probe-calendar-command --entry-id ENTRY_ID
 ```
 
-Use `--forward-spike --help` for the deliberately gated prepare/send commands. No vCalendar fallback is used. See [`docs/phase-2.md`](docs/phase-2.md).
+After that capability probe succeeds, the Calendar prepare/cancel experiment invokes Outlook's built-in Forward command but sets `Cancel=True` inside `AppointmentItem.Forward` before the operation completes or displays the forwarded item:
+
+```powershell
+.\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID --prepare-calendar-command --entry-id ENTRY_ID
+```
+
+This mode does not accept a recipient and does not call `Send()` or `Save()`. Use `--forward-spike --help` for the complete diagnostic command set. No vCalendar fallback is used. See [`docs/phase-2.md`](docs/phase-2.md).
 
 ## Production UI
 
