@@ -4,6 +4,7 @@ internal enum ForwardSpikeAction
 {
     Inspect,
     ProbeCalendarCommand,
+    PrepareCalendarCommand,
     Prepare,
     Send,
 }
@@ -38,6 +39,7 @@ internal sealed record ForwardSpikeOptions(
         var includeDetails = false;
         var showHelp = false;
         var probeCalendarCommand = false;
+        var prepareCalendarCommand = false;
         var prepare = false;
         var send = false;
 
@@ -53,6 +55,12 @@ internal sealed record ForwardSpikeOptions(
             if (string.Equals(argument, "--probe-calendar-command", StringComparison.OrdinalIgnoreCase))
             {
                 probeCalendarCommand = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--prepare-calendar-command", StringComparison.OrdinalIgnoreCase))
+            {
+                prepareCalendarCommand = true;
                 continue;
             }
 
@@ -155,11 +163,14 @@ internal sealed record ForwardSpikeOptions(
             return true;
         }
 
-        var requestedActions = (probeCalendarCommand ? 1 : 0) + (prepare ? 1 : 0) + (send ? 1 : 0);
+        var requestedActions = (probeCalendarCommand ? 1 : 0)
+            + (prepareCalendarCommand ? 1 : 0)
+            + (prepare ? 1 : 0)
+            + (send ? 1 : 0);
         if (requestedActions > 1)
         {
             options = Empty();
-            error = "--probe-calendar-command, --prepare, and --send are mutually exclusive.";
+            error = "--probe-calendar-command, --prepare-calendar-command, --prepare, and --send are mutually exclusive.";
             return false;
         }
 
@@ -181,22 +192,25 @@ internal sealed record ForwardSpikeOptions(
             ? ForwardSpikeAction.Send
             : prepare
                 ? ForwardSpikeAction.Prepare
-                : probeCalendarCommand
-                    ? ForwardSpikeAction.ProbeCalendarCommand
-                    : ForwardSpikeAction.Inspect;
+                : prepareCalendarCommand
+                    ? ForwardSpikeAction.PrepareCalendarCommand
+                    : probeCalendarCommand
+                        ? ForwardSpikeAction.ProbeCalendarCommand
+                        : ForwardSpikeAction.Inspect;
 
-        if (action == ForwardSpikeAction.ProbeCalendarCommand
+        if (action is ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand
             && string.IsNullOrWhiteSpace(calendarEntryId))
         {
             options = Empty();
-            error = "--entry-id is required with --probe-calendar-command.";
+            error = "--entry-id is required with --probe-calendar-command or --prepare-calendar-command.";
             return false;
         }
 
-        if (action != ForwardSpikeAction.ProbeCalendarCommand && calendarEntryId is not null)
+        if (action is not (ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand)
+            && calendarEntryId is not null)
         {
             options = Empty();
-            error = "--entry-id is valid only together with --probe-calendar-command.";
+            error = "--entry-id is valid only with --probe-calendar-command or --prepare-calendar-command.";
             return false;
         }
 
@@ -205,6 +219,13 @@ internal sealed record ForwardSpikeOptions(
         {
             options = Empty();
             error = "--to is required with --prepare or --send.";
+            return false;
+        }
+
+        if (action == ForwardSpikeAction.PrepareCalendarCommand && recipient is not null)
+        {
+            options = Empty();
+            error = "--prepare-calendar-command does not accept --to; the forwarded item is cancelled before recipient entry.";
             return false;
         }
 
