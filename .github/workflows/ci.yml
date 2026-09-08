@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, phase-3/ui-assisted-testing]
   pull_request:
     branches: [main]
 
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   dotnet:
-    name: .NET build, test and OutlookHost artifact
+    name: .NET build, test and Windows artifacts
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -41,16 +41,34 @@ jobs:
           -p:DebugType=None
           -p:DebugSymbols=false
           --output artifacts/outlook-host
-      - name: Smoke test published executable
+      - name: Smoke test published OutlookHost
         run: |
           .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --help
           .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --interop-check
           .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --forward-spike --help
-      - name: Upload Phase 2 OutlookHost
+      - name: Publish WinUI test harness
+        run: >-
+          dotnet publish src/OutlookAligner.App/OutlookAligner.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=false
+          -p:IncludeAllContentForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          --output artifacts/app
+      - name: Assemble UI test bundle
+        shell: pwsh
+        run: |
+          Copy-Item .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe .\artifacts\app\OutlookAligner.OutlookHost.exe -Force
+          if (-not (Test-Path .\artifacts\app\OutlookAligner.App.exe)) { throw "WinUI app executable missing" }
+          if (-not (Test-Path .\artifacts\app\OutlookAligner.OutlookHost.exe)) { throw "OutlookHost executable missing from UI bundle" }
+      - name: Upload Phase 3 UI test harness
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: OutlookAligner-Phase2-Forwarding-Spike-win-x64
-          path: artifacts/outlook-host/OutlookAligner.OutlookHost.exe
+          name: OutlookAligner-Phase3-UI-TestHarness-win-x64
+          path: artifacts/app/**
           if-no-files-found: error
           retention-days: 14
 
