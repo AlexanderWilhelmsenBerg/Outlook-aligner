@@ -162,7 +162,7 @@
                                 <TextBlock
                                     MaxWidth="850"
                                     Opacity="0.7"
-                                    Text="Non-recurring meetings are conservatively correlated by native meeting identity. Recurring occurrences stay explicitly unresolved until recurrence identity is proven."
+                                    Text="Select a logical meeting to inspect copies and choose authority. Recurring occurrences stay explicitly unresolved until recurrence identity is proven."
                                     TextWrapping="Wrap" />
                             </StackPanel>
                             <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="Refresh Outlook" VerticalAlignment="Center" />
@@ -178,30 +178,78 @@
                                 Title="Outlook notice" />
                         </StackPanel>
 
-                        <ListView Grid.Row="2" ItemsSource="{Binding AlignmentGroups}" SelectionMode="None">
-                            <ListView.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Padding="8,10" ColumnSpacing="14" RowSpacing="4">
+                        <Grid Grid.Row="2" ColumnSpacing="20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3*" MinWidth="480" />
+                                <ColumnDefinition Width="2*" MinWidth="360" />
+                            </Grid.ColumnDefinitions>
+
+                            <ListView
+                                ItemsSource="{Binding AlignmentGroups}"
+                                SelectedItem="{Binding SelectedAlignmentGroup, Mode=TwoWay}"
+                                SelectionMode="Single">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="8,10" ColumnSpacing="14" RowSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="145" />
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="2*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding State}" />
+                                            <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="2" Text="{Binding TimeSummary}" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.75" Text="{Binding AccountSummary}" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding Explanation}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="12" Padding="0,4,8,12">
+                                    <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding SelectedAlignmentGroup.Subject}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding SelectedAlignmentGroup.Explanation}" TextWrapping="Wrap" />
+
+                                    <Grid ColumnSpacing="10" RowSpacing="7">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="150" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
-
-                                        <TextBlock FontWeight="SemiBold" Text="{Binding State}" />
-                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Grid.Column="2" Text="{Binding TimeSummary}" TextWrapping="Wrap" />
-                                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.75" Text="{Binding AccountSummary}" TextWrapping="Wrap" />
-                                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding Explanation}" TextWrapping="Wrap" />
+                                        <TextBlock FontWeight="SemiBold" Text="State" />
+                                        <TextBlock Grid.Column="1" Text="{Binding SelectedAlignmentGroup.State}" />
+                                        <TextBlock Grid.Row="1" FontWeight="SemiBold" Text="Missing from" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedAlignmentGroup.MissingSummary}" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Observed copies" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" FontFamily="Consolas" Text="{Binding SelectedAlignmentGroup.MemberDetails}" TextWrapping="Wrap" />
                                     </Grid>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
+
+                                    <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Text="Authority" />
+                                    <ComboBox
+                                        ItemsSource="{Binding AuthorityChoices}"
+                                        SelectedItem="{Binding SelectedAuthority, Mode=TwoWay}"
+                                        DisplayMemberPath="DisplayName"
+                                        IsEnabled="{Binding SelectedAlignmentGroup.CanChooseAuthority}"
+                                        PlaceholderText="Choose authoritative account" />
+                                    <TextBlock Opacity="0.75" Text="{Binding AuthorityStatus}" TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Opacity="0.65"
+                                        Text="Authority selection is session-only in this slice and does not modify Outlook. It is the prerequisite for future Copy/Move previews."
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
                     </Grid>
 
                     <Grid x:Name="SettingsPanel" Visibility="Collapsed" RowSpacing="14">
