@@ -64,6 +64,7 @@ public sealed record CalendarEventDto(
     bool IsAllDay,
     bool IsRecurring,
     string RecurrenceState,
+    string MeetingStatus,
     string BusyStatus,
     string Sensitivity,
     string? Subject,
