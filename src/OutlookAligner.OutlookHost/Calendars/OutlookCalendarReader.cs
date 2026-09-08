@@ -84,6 +84,7 @@ internal static class OutlookCalendarReader
             appointment.AllDayEvent,
             appointment.IsRecurring,
             appointment.RecurrenceState.ToString(),
+            appointment.MeetingStatus.ToString(),
             appointment.BusyStatus.ToString(),
             appointment.Sensitivity.ToString(),
             includeDetails ? appointment.Subject : null,
