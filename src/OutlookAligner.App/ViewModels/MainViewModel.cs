@@ -19,6 +19,7 @@ public sealed class MainViewModel : ObservableObject
     private string _status = "Ready to read Classic Outlook.";
     private string _forwardCapability = "Not checked";
     private string _lastDiagnostics = "No diagnostics yet.";
+    private string _selectedEventDiagnostics = "Select a calendar item to inspect its Outlook identity.";
     private string _alignmentSummary = "Refresh Outlook to build the alignment view.";
     private string _noticeMessage = string.Empty;
 
@@ -54,6 +55,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             ForwardCapability = "Not checked";
+            SelectedEventDiagnostics = BuildSelectedEventDiagnostics(value);
             UpdateTargetAccounts();
             NotifyCommandStateChanged();
         }
@@ -115,6 +117,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _lastDiagnostics;
         private set => SetProperty(ref _lastDiagnostics, value);
+    }
+
+    public string SelectedEventDiagnostics
+    {
+        get => _selectedEventDiagnostics;
+        private set => SetProperty(ref _selectedEventDiagnostics, value);
     }
 
     public string AlignmentSummary
@@ -315,7 +323,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void RebuildAlignmentGroups(
         OutlookProbeResult result,
-        IReadOnlyList<CalendarEventRowViewModel> eventRows)
+        CalendarEventRowViewModel[] eventRows)
     {
         var expectedAccounts = result.Accounts
             .Where(account => account.CalendarAvailable && !string.IsNullOrWhiteSpace(account.SmtpAddress))
@@ -378,5 +386,22 @@ public sealed class MainViewModel : ObservableObject
             : result.Warnings.Select(warning => "Warning: " + warning);
 
         return string.Join(Environment.NewLine, accountLines.Concat(warningLines));
+    }
+
+    private static string BuildSelectedEventDiagnostics(CalendarEventRowViewModel? selectedEvent)
+    {
+        if (selectedEvent is null)
+        {
+            return "No calendar item is selected.";
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            $"Subject: {selectedEvent.Subject}",
+            $"Source account: {selectedEvent.SourceSmtp}",
+            $"GlobalAppointmentID: {selectedEvent.CalendarEvent.GlobalAppointmentId ?? "(unavailable)"}",
+            $"EntryID: {selectedEvent.CalendarEvent.EntryId ?? "(unavailable)"}",
+            $"StoreID: {selectedEvent.Account.StoreId ?? "(unavailable)"}",
+            $"Recurrence: {selectedEvent.RecurrenceDisplay}");
     }
 }
