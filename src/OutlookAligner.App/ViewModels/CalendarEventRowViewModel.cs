@@ -50,4 +50,16 @@ public sealed class OutlookAccountChoice
         : $"{Account.DisplayName} ({Account.SmtpAddress})";
 
     public string? SmtpAddress => Account.SmtpAddress;
+
+    public string AccountType => Account.AccountType;
+
+    public int EventCount => Account.EventCount;
+
+    public string CalendarStatus => Account.CalendarAvailable
+        ? $"Calendar available · {Account.EventCount} events in current horizon"
+        : "Calendar unavailable";
+
+    public string ErrorSummary => string.IsNullOrWhiteSpace(Account.Error)
+        ? string.Empty
+        : "Outlook reported an account error; see Diagnostics.";
 }
