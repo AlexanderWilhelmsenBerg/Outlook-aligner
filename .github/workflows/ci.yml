@@ -66,7 +66,9 @@ jobs:
         shell: pwsh
         run: |
           $logPath = Join-Path $env:LOCALAPPDATA "OutlookAligner\startup.log"
+          $eventLogPath = Join-Path $env:LOCALAPPDATA "OutlookAligner\events.jsonl"
           if (Test-Path $logPath) { Remove-Item $logPath -Force }
+          if (Test-Path $eventLogPath) { Remove-Item $eventLogPath -Force }
 
           $process = Start-Process -FilePath .\artifacts\app\OutlookAligner.App.exe -PassThru
           Start-Sleep -Seconds 5
@@ -79,6 +81,15 @@ jobs:
               Write-Host "--- end startup.log ---"
             }
             throw "WinUI app exited during startup with code $($process.ExitCode)"
+          }
+
+          if (-not (Test-Path $eventLogPath)) {
+            throw "Structured diagnostics log was not created during startup"
+          }
+
+          $eventLog = Get-Content $eventLogPath -Raw
+          if ($eventLog -notmatch 'WinUI session started') {
+            throw "Structured diagnostics log did not contain the expected session-start event"
           }
 
           Stop-Process -Id $process.Id -Force
