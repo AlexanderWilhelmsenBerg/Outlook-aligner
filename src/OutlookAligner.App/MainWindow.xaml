@@ -413,7 +413,7 @@
                                 FontFamily="Consolas"
                                 Text="{Binding LastDiagnostics}"
                                 TextWrapping="Wrap"
-                                VerticalScrollBarVisibility="Auto" />
+                                ScrollViewer.VerticalScrollBarVisibility="Auto" />
                         </StackPanel>
                     </Grid>
                 </Grid>
