@@ -85,8 +85,8 @@ public static class EventCorrelation
 
     private static LogicalEventGroup BuildCorrelatedGroup(
         string globalAppointmentId,
-        IReadOnlyList<ObservedCalendarEvent> members,
-        IReadOnlyList<string> expectedAccounts)
+        ObservedCalendarEvent[] members,
+        string[] expectedAccounts)
     {
         var duplicateAccounts = members
             .GroupBy(member => member.AccountKey, StringComparer.OrdinalIgnoreCase)
@@ -173,7 +173,7 @@ public static class EventCorrelation
             DetailsDiffer: false,
             explanation);
 
-    private static string PickDisplaySubject(IReadOnlyList<ObservedCalendarEvent> members)
+    private static string PickDisplaySubject(ObservedCalendarEvent[] members)
         => members
             .Select(member => member.Subject)
             .FirstOrDefault(subject => !string.IsNullOrWhiteSpace(subject))
