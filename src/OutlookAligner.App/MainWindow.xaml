@@ -1,0 +1,183 @@
+<Window
+    x:Class="OutlookAligner.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Outlook Aligner">
+
+    <Grid x:Name="RootLayout" Loaded="OnRootLoaded">
+        <NavigationView
+            x:Name="RootNavigation"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            PaneDisplayMode="Left"
+            SelectionChanged="OnNavigationSelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Calendar" Tag="calendar" />
+                <NavigationViewItem Content="Alignment" Tag="alignment" />
+                <NavigationViewItem Content="Settings" Tag="settings" />
+                <NavigationViewItem Content="Diagnostics" Tag="diagnostics" />
+            </NavigationView.MenuItems>
+
+            <NavigationView.Content>
+                <Grid Margin="20">
+                    <Grid x:Name="CalendarPanel" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="Calendar" />
+                                <TextBlock Opacity="0.7" Text="Select a meeting. Outlook Aligner handles the technical identifiers for you." />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <TextBlock VerticalAlignment="Center" Text="Horizon" />
+                                <NumberBox
+                                    Width="92"
+                                    Maximum="3650"
+                                    Minimum="1"
+                                    SpinButtonPlacementMode="Compact"
+                                    Value="{Binding ScanDays, Mode=TwoWay}" />
+                                <TextBlock VerticalAlignment="Center" Text="days" />
+                                <Button Command="{Binding RefreshCommand}" Content="Refresh" />
+                                <ProgressRing Width="24" Height="24" IsActive="{Binding IsBusy}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Grid.Row="1" Opacity="0.75" Text="{Binding Status}" TextWrapping="Wrap" />
+
+                        <Grid Grid.Row="2" ColumnSpacing="20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" MinWidth="360" />
+                                <ColumnDefinition Width="3*" MinWidth="420" />
+                            </Grid.ColumnDefinitions>
+
+                            <ListView
+                                ItemsSource="{Binding Events}"
+                                SelectedItem="{Binding SelectedEvent, Mode=TwoWay}"
+                                SelectionMode="Single">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="4,8" RowSpacing="3">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Row="1" Opacity="0.75" Text="{Binding TimeDisplay}" />
+                                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10">
+                                                <TextBlock Opacity="0.65" Text="{Binding AccountName}" />
+                                                <TextBlock Opacity="0.65" Text="{Binding RecurrenceDisplay}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="14" Padding="0,4,8,12">
+                                    <TextBlock FontSize="24" FontWeight="SemiBold" Text="{Binding SelectedEvent.Subject}" TextWrapping="Wrap" />
+
+                                    <Grid ColumnSpacing="12" RowSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="130" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock FontWeight="SemiBold" Text="Source" />
+                                        <TextBlock Grid.Column="1" Text="{Binding SelectedEvent.SourceSmtp}" TextWrapping="Wrap" />
+
+                                        <TextBlock Grid.Row="1" FontWeight="SemiBold" Text="Time" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEvent.TimeDisplay}" TextWrapping="Wrap" />
+
+                                        <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Location" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEvent.Location}" TextWrapping="Wrap" />
+
+                                        <TextBlock Grid.Row="3" FontWeight="SemiBold" Text="Recurrence" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedEvent.RecurrenceDisplay}" TextWrapping="Wrap" />
+
+                                        <TextBlock Grid.Row="4" FontWeight="SemiBold" Text="Forward" />
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding ForwardCapability}" />
+                                    </Grid>
+
+                                    <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Text="Test target account" />
+                                    <ComboBox
+                                        ItemsSource="{Binding TargetAccounts}"
+                                        SelectedItem="{Binding SelectedTargetAccount, Mode=TwoWay}"
+                                        DisplayMemberPath="DisplayName"
+                                        PlaceholderText="Choose another Outlook account" />
+
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Command="{Binding ProbeForwardCommand}" Content="Check Forward" />
+                                        <Button Command="{Binding PrepareForwardCommand}" Content="Prepare Forward (discard)" />
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        Opacity="0.7"
+                                        Text="Prepare Forward re-checks Outlook capability, resolves the selected target, and discards the unsent native forward. This UI slice cannot send a meeting."
+                                        TextWrapping="Wrap" />
+
+                                    <Expander Header="Technical identifiers">
+                                        <Grid Margin="0,8,0,0" ColumnSpacing="10" RowSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock FontWeight="SemiBold" Text="GlobalAppointmentID" />
+                                            <TextBlock Grid.Column="1" Text="{Binding SelectedEvent.CalendarEvent.GlobalAppointmentId}" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Row="1" FontWeight="SemiBold" Text="EntryID" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEvent.CalendarEvent.EntryId}" TextWrapping="Wrap" />
+                                            <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="StoreID" />
+                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEvent.Account.StoreId}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Expander>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
+
+                    <StackPanel x:Name="PlaceholderPanel" Visibility="Collapsed" MaxWidth="720" HorizontalAlignment="Left" Spacing="10">
+                        <TextBlock x:Name="PlaceholderTitle" FontSize="28" FontWeight="SemiBold" />
+                        <TextBlock
+                            Text="This destination is part of the production shell. Its full workflow will be implemented in the next slices while Calendar remains usable for Outlook testing."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="DiagnosticsPanel" Visibility="Collapsed" Spacing="10">
+                        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Diagnostics" />
+                        <TextBlock Opacity="0.7" Text="Raw host output and partial-failure details live here instead of in normal workflows." TextWrapping="Wrap" />
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <TextBox
+                                IsReadOnly="True"
+                                AcceptsReturn="True"
+                                FontFamily="Consolas"
+                                Text="{Binding LastDiagnostics}"
+                                TextWrapping="Wrap" />
+                        </ScrollViewer>
+                    </StackPanel>
+                </Grid>
+            </NavigationView.Content>
+        </NavigationView>
+    </Grid>
+</Window>
