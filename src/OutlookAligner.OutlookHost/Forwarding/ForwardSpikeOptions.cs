@@ -5,6 +5,7 @@ internal enum ForwardSpikeAction
     Inspect,
     ProbeCalendarCommand,
     PrepareCalendarCommand,
+    PrepareCalendarRecipient,
     Prepare,
     Send,
 }
@@ -40,6 +41,7 @@ internal sealed record ForwardSpikeOptions(
         var showHelp = false;
         var probeCalendarCommand = false;
         var prepareCalendarCommand = false;
+        var prepareCalendarRecipient = false;
         var prepare = false;
         var send = false;
 
@@ -61,6 +63,12 @@ internal sealed record ForwardSpikeOptions(
             if (string.Equals(argument, "--prepare-calendar-command", StringComparison.OrdinalIgnoreCase))
             {
                 prepareCalendarCommand = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--prepare-calendar-recipient", StringComparison.OrdinalIgnoreCase))
+            {
+                prepareCalendarRecipient = true;
                 continue;
             }
 
@@ -165,12 +173,13 @@ internal sealed record ForwardSpikeOptions(
 
         var requestedActions = (probeCalendarCommand ? 1 : 0)
             + (prepareCalendarCommand ? 1 : 0)
+            + (prepareCalendarRecipient ? 1 : 0)
             + (prepare ? 1 : 0)
             + (send ? 1 : 0);
         if (requestedActions > 1)
         {
             options = Empty();
-            error = "--probe-calendar-command, --prepare-calendar-command, --prepare, and --send are mutually exclusive.";
+            error = "--probe-calendar-command, --prepare-calendar-command, --prepare-calendar-recipient, --prepare, and --send are mutually exclusive.";
             return false;
         }
 
@@ -192,40 +201,47 @@ internal sealed record ForwardSpikeOptions(
             ? ForwardSpikeAction.Send
             : prepare
                 ? ForwardSpikeAction.Prepare
-                : prepareCalendarCommand
-                    ? ForwardSpikeAction.PrepareCalendarCommand
-                    : probeCalendarCommand
-                        ? ForwardSpikeAction.ProbeCalendarCommand
-                        : ForwardSpikeAction.Inspect;
+                : prepareCalendarRecipient
+                    ? ForwardSpikeAction.PrepareCalendarRecipient
+                    : prepareCalendarCommand
+                        ? ForwardSpikeAction.PrepareCalendarCommand
+                        : probeCalendarCommand
+                            ? ForwardSpikeAction.ProbeCalendarCommand
+                            : ForwardSpikeAction.Inspect;
 
-        if (action is ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand
+        if (action is ForwardSpikeAction.ProbeCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarRecipient
             && string.IsNullOrWhiteSpace(calendarEntryId))
         {
             options = Empty();
-            error = "--entry-id is required with --probe-calendar-command or --prepare-calendar-command.";
+            error = "--entry-id is required with the Calendar command modes.";
             return false;
         }
 
-        if (action is not (ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand)
+        if (action is not (ForwardSpikeAction.ProbeCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarRecipient)
             && calendarEntryId is not null)
         {
             options = Empty();
-            error = "--entry-id is valid only with --probe-calendar-command or --prepare-calendar-command.";
+            error = "--entry-id is valid only with a Calendar command mode.";
             return false;
         }
 
-        if (action is ForwardSpikeAction.Prepare or ForwardSpikeAction.Send
+        if (action is ForwardSpikeAction.Prepare or ForwardSpikeAction.Send or ForwardSpikeAction.PrepareCalendarRecipient
             && string.IsNullOrWhiteSpace(recipient))
         {
             options = Empty();
-            error = "--to is required with --prepare or --send.";
+            error = "--to is required with recipient prepare/send modes.";
             return false;
         }
 
-        if (action == ForwardSpikeAction.PrepareCalendarCommand && recipient is not null)
+        if (action is ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand
+            && recipient is not null)
         {
             options = Empty();
-            error = "--prepare-calendar-command does not accept --to; the forwarded item is cancelled before recipient entry.";
+            error = "--to is not valid with the read-only/cancelled Calendar command modes.";
             return false;
         }
 
