@@ -191,6 +191,8 @@ Console result:
 
 > Outlook's Calendar Forward created a native MeetingItem, exactly one recipient resolved, SendUsingAccount was pinned to the selected source account, and MeetingItem.Send() completed.
 
+This proves the end-to-end delivery path. The remaining target-side validation for Phase 2 is to confirm normal meeting controls and Teams join behavior where applicable; those details are not inferred merely from successful delivery.
+
 ### Product decision after result #5
 
 The **Calendar-command route is now the primary candidate for the production Forward action**.
@@ -255,6 +257,7 @@ Before PR #5 may merge:
 - [x] source account can be pinned with `SendUsingAccount`;
 - [x] one explicitly confirmed Calendar-command send completes;
 - [x] forwarded meeting is present in the controlled target account;
+- [ ] target-side normal meeting controls / Teams behavior confirmed where applicable;
 - [ ] recurring/Teams case sampled;
 - [ ] different source account sampled;
 - [ ] forwarding-disabled behavior sampled if a suitable event is readily available.
