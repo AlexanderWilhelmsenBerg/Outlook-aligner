@@ -24,15 +24,6 @@ public sealed partial class MainWindow : Window
         RootLayout.DataContext = ViewModel;
         RootNavigation.SelectedItem = RootNavigation.MenuItems[0];
 
-        LogLevelFilters =
-        [
-            new LogLevelChoice("All", null),
-            new LogLevelChoice("Debug", AppLogLevel.Debug),
-            new LogLevelChoice("Info", AppLogLevel.Info),
-            new LogLevelChoice("Warning", AppLogLevel.Warning),
-            new LogLevelChoice("Error", AppLogLevel.Error),
-        ];
-
         RebuildVisibleLogEntries();
         _eventLog.EntryAdded += OnLogEntryAdded;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -44,7 +35,14 @@ public sealed partial class MainWindow : Window
 
     public ObservableCollection<AppLogEntry> VisibleLogEntries { get; } = [];
 
-    public IReadOnlyList<LogLevelChoice> LogLevelFilters { get; }
+    public IReadOnlyList<LogLevelChoice> LogLevelFilters { get; } =
+    [
+        new LogLevelChoice("All", null),
+        new LogLevelChoice("Debug", AppLogLevel.Debug),
+        new LogLevelChoice("Info", AppLogLevel.Info),
+        new LogLevelChoice("Warning", AppLogLevel.Warning),
+        new LogLevelChoice("Error", AppLogLevel.Error),
+    ];
 
     public string LogFilePathDisplay => $"Persistent log: {_eventLog.FilePath}";
 
