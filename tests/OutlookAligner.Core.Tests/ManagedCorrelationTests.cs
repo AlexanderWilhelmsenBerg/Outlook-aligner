@@ -81,11 +81,11 @@ public sealed class ManagedCorrelationTests
         var groups = EventCorrelation.BuildGroups([source, suspicious], Accounts);
 
         Assert.Equal(2, groups.Count);
-        var conflict = Assert.Single(groups.Where(group => group.State == AlignmentState.Conflict));
+        var conflict = Assert.Single(groups, group => group.State == AlignmentState.Conflict);
         Assert.Equal("copy", Assert.Single(conflict.Members).LocatorKey);
         Assert.Contains("incomplete", conflict.Explanation, StringComparison.OrdinalIgnoreCase);
 
-        var sourceGroup = Assert.Single(groups.Where(group => group.State == AlignmentState.Missing));
+        var sourceGroup = Assert.Single(groups, group => group.State == AlignmentState.Missing);
         Assert.Equal("source", Assert.Single(sourceGroup.Members).LocatorKey);
     }
 
