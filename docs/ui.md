@@ -38,222 +38,150 @@ Main area:
 - FullCalendar hosted in WebView2;
 - events visually associated with their source account;
 - alignment state represented separately from account identity so color is not the only status signal;
-- loading, empty, partial/degraded, and error states are explicit.
+- selecting an event opens a comparison/detail pane rather than requiring navigation away from the calendar.
 
-Details/comparison pane:
+Comparison/detail pane:
 
-- opens when an event/logical group is selected;
-- subject and time at top;
-- one row/card per account;
-- presence/missing state;
-- start/end and meaningful differences;
-- authority account + reason;
-- supported action buttons;
-- no raw IDs in the normal pane.
+- logical event status;
+- source/account membership;
+- Start/End comparison;
+- authority/origin and confidence;
+- relevant detail differences;
+- supported actions for the selected event;
+- concise explanation for disabled/unsupported actions.
 
-### Action availability
+### Forward meeting action
 
-Buttons are capability-driven.
+Phase 2 has proven a genuine Classic Outlook native Forward path for an accepted Calendar meeting. The production UI must present this as one normal user action, **Forward meeting**, not as a choice between diagnostic COM mechanisms.
 
-Examples:
+When the user selects Forward meeting:
 
-- `Forward meeting` appears/enables only when genuine native forwarding is supported for that event;
-- `Copy Full` and `Copy Busy` appear when the destination/safety rules permit them;
-- unsupported recurring mutations are disabled with a short explanation;
-- a disabled capability must never silently degrade into a different operation.
+1. the UI shows the intended source event/account and target account;
+2. OutlookHost revalidates the selected Calendar item's identity and meeting state;
+3. OutlookHost checks that Classic Outlook's built-in `Forward` command is valid, visible and enabled for that exact event;
+4. only then may OutlookHost invoke the native Forward command and capture the native `MeetingItem` supplied by `AppointmentItem.Forward`;
+5. no unexpected pre-existing recipients are allowed;
+6. only the user-selected target is added/resolved;
+7. `SendUsingAccount` is pinned to the selected source account;
+8. send occurs only after explicit user intent/confirmation for that action.
+
+If the event cannot be natively forwarded, **Forward meeting is disabled** and the detail pane explains why in user-facing language. The UI must never silently substitute `ForwardAsVcal()`/ICS and pretend it is equivalent native forwarding.
+
+The retained-request recovery route investigated in Phase 2 is an implementation detail/diagnostic path and must not appear as a separate product action.
 
 ## 3. Alignment page
 
 ### Purpose
 
-Provide a work queue for events that need attention rather than requiring the user to visually inspect the calendar.
+Provide a task-oriented queue of items that need attention.
 
-### Required controls
+The page includes:
 
-Filters:
+- status filters (`Missing`, `Moved`, `DetailsDifferent`, `Duplicate`, `Conflict`, `Ignored`);
+- account/source filters;
+- date range;
+- authority/confidence filter where useful;
+- sortable list/table of logical events;
+- selection and detail pane;
+- safe single-event actions;
+- later batch selection/preview for Move All.
 
-- Missing
-- Moved
-- DetailsDifferent
-- Duplicate
-- Conflict
-- Ignored
+The page must clearly distinguish:
 
-Each row/group shows:
+- original/authoritative events;
+- Aligner-managed copies;
+- true forwarded meetings;
+- unmanaged/pre-existing possible matches.
 
-- event title/time;
-- status;
-- account membership;
-- authority;
-- concise reason for the discrepancy;
-- available action(s).
+## 4. Settings page
 
-Selection supports a comparison pane equivalent to Calendar.
+At minimum:
 
-### Authority
+- future scan horizon, default 90 days;
+- account display names/order where appropriate;
+- account visual identifiers;
+- privacy preference for normal diagnostics/details;
+- theme preference if the app does not simply follow Windows;
+- confirmation preferences only where they do not weaken mandatory safety gates.
 
-The user can select/override authority where allowed. The UI displays why the current authority exists:
+Settings must not expose or request Outlook passwords, Graph credentials, Azure app registration, or tenant consent.
 
-- KnownOrigin
-- UserSelected
-- Inferred
-- Unknown
+## 5. Diagnostics page
 
-`Unknown` must be visually obvious and must block unsafe bulk movement.
-
-## 4. Write-action UX
-
-No write action should behave like a casual toolbar toggle.
-
-### Single event
-
-Before a write, show enough context to answer:
-
-- what item is changing;
-- which account is the source/authority;
-- which account is the target;
-- what fields/action will change;
-- what will **not** change.
-
-### Bulk actions
-
-`Move All` and any future bulk operation require an immutable preview before execution.
-
-Preview groups items into:
-
-- Will execute
-- Excluded
-- Unsafe / requires user decision
-
-The user confirms the resulting plan, not merely the button label.
-
-After execution, show per-item results and allow failures to be retried or inspected independently.
-
-## 5. Settings page
-
-Initial v1 settings:
-
-- future scan horizon;
-- account display order/naming preferences;
-- privacy defaults for copied events;
-- theme/appearance options where appropriate;
-- diagnostics verbosity preference if later required.
-
-There are **no credential fields** because Outlook authentication remains owned by the configured Classic Outlook profile.
-
-## 6. Diagnostics page
-
-Diagnostics is for technical state that should not clutter normal use.
-
-Show:
+Diagnostics can expose technical information hidden from normal UI:
 
 - Classic Outlook availability;
-- current profile;
-- discovered accounts/stores/calendars;
-- last scan time/duration/counts;
-- OutlookHost/IPC health;
-- per-event capability details when useful, including native Forward availability;
-- privacy-safe errors/HRESULT categories;
+- profile/account/store discovery;
+- OutlookHost/IPC status and protocol version;
+- last refresh duration/results/errors;
+- per-event native Forward capability where useful;
+- `StoreID`, `EntryID`, `GlobalAppointmentID` for troubleshooting;
+- HRESULT/type context;
 - operation history;
-- application/build/schema versions.
+- app/package/version information.
 
-Allow explicit copying/exporting of diagnostic IDs such as StoreID, EntryID, and GlobalAppointmentID. Do not expose those IDs by default on Calendar or Alignment pages.
+Meeting body, attendee lists and online-meeting URLs must not be dumped into diagnostics by default.
 
-## 7. Visual behavior
+## 6. Write interaction rules
 
-### Account identity
+- Every write action identifies source and target before execution.
+- Unsupported actions are disabled with an explanation rather than failing late where capability can be known in advance.
+- Single-event destructive/significant actions require deliberate user invocation.
+- Bulk writes always show an immutable preview first.
+- The preview states exactly which events will be changed/skipped and why.
+- Once confirmed, execution uses the previewed plan rather than silently recalculating a materially different plan.
+- Partial failures are shown per item; already successful operations remain visible in history.
+- The authoritative original is never mutated by Move Selected/Move All.
+- V1 has no deletion synchronization.
 
-The three accounts need stable visual identity, but color cannot be the only differentiator. Pair color/accent with label/icon/pattern/state text where relevant.
+## 7. Loading, empty, error, and degraded states
 
-### Alignment state
+The production UI must deliberately handle:
 
-Use consistent badges/icons/text for Aligned, Missing, Moved, DetailsDifferent, Duplicate, Conflict, and Ignored.
+- Outlook not running/available;
+- Classic Outlook not installed or profile unavailable;
+- one account/store unavailable;
+- partial calendar read failure;
+- refresh in progress;
+- no events in range;
+- OutlookHost crash/restart;
+- native Forward unavailable for a particular event;
+- stale event locator that requires refresh;
+- write action that fails after preview.
 
-### Theme
+A failure in one account or event must not unnecessarily blank the entire application.
 
-Support Windows light/dark mode. Avoid hard-coded assumptions in the WebView calendar; the FullCalendar bridge must receive theme tokens from WinUI.
+## 8. Accessibility and Windows behavior
 
-### Density
+- Keyboard navigable.
+- Visible focus states.
+- Accessible names/automation properties for controls and status indicators.
+- Account/status meaning must not rely on color alone.
+- High-DPI and display scaling supported.
+- Light/dark theme supported/follows Windows by default.
+- Resizable desktop window with sensible minimum size.
+- Long subjects/account names truncate gracefully and remain discoverable through accessible/tool-tip text.
 
-Desktop-first. Optimize for useful calendar/comparison density rather than oversized mobile-style controls.
+## 9. UI/OutlookHost boundary
 
-## 8. Accessibility and input
+The UI never receives COM objects.
 
-Minimum v1 expectations:
+`OutlookAligner.App` exchanges versioned plain DTOs with `OutlookAligner.OutlookHost` through local IPC. OutlookHost owns all COM interaction, including capability checks and writes.
 
-- keyboard navigation through navigation, filters, event list, panes, and confirmation dialogs;
-- visible focus state;
-- AutomationProperties/accessible labels for custom controls;
-- useful status text in addition to color;
-- high-DPI scaling;
-- no pointer-only action that cannot be performed by keyboard.
+The production app must not shell out to the diagnostic CLI and scrape console text as its application protocol.
 
-## 9. Technical boundaries
+## 10. Phase 4 acceptance gate
 
-### WinUI app
+Phase 4 is not complete until:
 
-`OutlookAligner.App` owns:
-
-- window/application lifecycle;
-- navigation;
-- MVVM view models;
-- user intent and confirmation;
-- presentation state;
-- WebView2/FullCalendar hosting;
-- local persisted UI preferences.
-
-### OutlookHost
-
-`OutlookAligner.OutlookHost` owns:
-
-- all Classic Outlook COM calls;
-- STA execution;
-- COM object lifetime;
-- capability checks;
-- read/write operations explicitly requested by the app.
-
-COM RCWs never enter the UI process/contracts.
-
-### IPC
-
-IPC messages are versioned plain DTOs. The UI must be able to display:
-
-- connected;
-- Outlook unavailable;
-- partial account/calendar failure;
-- host restarted/reconnecting;
-- operation failed with privacy-safe reason.
-
-## 10. Phase 4 acceptance
-
-Phase 4 is complete only when all of the following are true:
-
-- [ ] `OutlookAligner.App` contains real WinUI app/window code rather than the current compile-only marker shell;
-- [ ] app launches into Calendar;
-- [ ] NavigationView switches between Calendar, Alignment, Settings, Diagnostics;
-- [ ] the real three-account profile can be refreshed from the GUI;
-- [ ] scan horizon can be changed from the GUI;
-- [ ] FullCalendar displays the read-only scan results;
-- [ ] selecting an event/group opens comparison details;
-- [ ] Alignment filters work;
-- [ ] authority can be selected locally without writing Outlook data;
-- [ ] loading/empty/error/partial states are implemented;
-- [ ] Diagnostics exposes OutlookHost/account health and IDs deliberately;
-- [ ] normal GUI workflow does not require the CLI;
-- [ ] no Outlook writes exist in Phase 4;
-- [ ] WinUI build/package is part of CI;
-- [ ] keyboard, light/dark, and high-DPI smoke tests pass.
-
-## 11. Later write phases
-
-Phases 5–9 add write capabilities into this UI rather than creating separate command-line workflows. Every new write capability must define:
-
-- where its button/action lives;
-- enable/disable capability rules;
-- preview/confirmation behavior;
-- progress state;
-- per-item success/failure presentation;
-- recovery/retry behavior;
-- privacy impact.
-
-The GUI is therefore part of the architecture and acceptance model, not decoration applied after the synchronization engine is complete.
+- a real packaged WinUI 3 application launches;
+- `App.xaml` / `MainWindow` / NavigationView exist;
+- Calendar, Alignment, Settings and Diagnostics pages are navigable;
+- OutlookHost IPC is wired with versioned DTOs;
+- account discovery and refresh work from the GUI;
+- FullCalendar renders the read model;
+- selecting an event exposes comparison/status/authority/action state;
+- Forward meeting capability can be represented correctly in the UI even before all production write phases are enabled;
+- loading/empty/error/partial-failure states exist;
+- normal usage needs no CLI arguments;
+- keyboard/high-DPI/theme/accessibility basics are verified.
