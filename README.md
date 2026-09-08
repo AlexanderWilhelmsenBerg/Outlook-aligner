@@ -38,7 +38,7 @@ accepted Calendar AppointmentItem
 
 A real Kverneland meeting was forwarded to another user-controlled Outlook account and arrived there as a forwarded meeting. No `AppointmentItem.ForwardAsVcal()` or fake ICS fallback is used.
 
-The remaining Phase 2 work is a deliberately small reliability matrix covering recurrence/Teams behavior, a different source account, and forwarding-disabled behavior if a suitable event is readily available. See [`docs/phase-2.md`](docs/phase-2.md).
+Delivery itself is proven. Target-side validation of normal meeting controls/Teams behavior where applicable, plus a deliberately small reliability matrix covering recurrence and another source account, remains before Phase 2 closes. See [`docs/phase-2.md`](docs/phase-2.md).
 
 ## Production UI
 
