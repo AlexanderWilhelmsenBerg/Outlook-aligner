@@ -511,6 +511,7 @@ public sealed class MainViewModel : ObservableObject
         {
             var managed = row.CalendarEvent.ManagedCopy;
             var isManagedCopy = managed?.State == ManagedCopyState.Valid;
+            var managedMetadataIssue = BuildManagedMetadataIssue(managed);
             return new ObservedCalendarEvent(
                 row.Account.SmtpAddress ?? row.Account.DisplayName,
                 row.CalendarEvent.EntryId ?? $"unlocated:{row.CalendarEvent.StartLocal:O}:{row.Subject}",
@@ -527,7 +528,9 @@ public sealed class MainViewModel : ObservableObject
                 ManagedSourceGlobalAppointmentId: isManagedCopy ? managed!.SourceGlobalAppointmentId : null,
                 ManagedSyncGroupId: isManagedCopy ? managed!.SyncGroupId : null,
                 ManagedSourceAccountId: isManagedCopy ? managed!.SourceAccountId : null,
-                ManagedCopyType: isManagedCopy ? managed!.CopyType : null);
+                ManagedCopyType: isManagedCopy ? managed!.CopyType : null,
+                HasManagedMetadataIssue: managedMetadataIssue is not null,
+                ManagedMetadataIssue: managedMetadataIssue);
         });
 
         var groups = EventCorrelation.BuildGroups(observations, expectedAccounts);
@@ -606,6 +609,15 @@ public sealed class MainViewModel : ObservableObject
             $"Managed copy type: {managed?.CopyType ?? "(none)"}",
             $"Managed schema: {managed?.SchemaVersion ?? "(none)"}");
     }
+
+    private static string? BuildManagedMetadataIssue(ManagedCopyMetadataDto? metadata)
+        => metadata?.State switch
+        {
+            ManagedCopyState.Incomplete => "Outlook Aligner metadata exists on this item but is incomplete; correlation and alignment actions are blocked.",
+            ManagedCopyState.UnsupportedSchema => "This item uses an unsupported Outlook Aligner metadata schema; correlation and alignment actions are blocked.",
+            ManagedCopyState.Unreadable => "Outlook could not read Outlook Aligner metadata for this item; correlation and alignment actions are blocked.",
+            _ => null,
+        };
 
     private static string BuildUnavailableAuthorityStatus(AlignmentGroupViewModel group)
         => group.Group.State switch

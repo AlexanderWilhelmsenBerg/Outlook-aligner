@@ -28,7 +28,9 @@ public sealed record ObservedCalendarEvent(
     string? ManagedSourceGlobalAppointmentId = null,
     string? ManagedSyncGroupId = null,
     string? ManagedSourceAccountId = null,
-    string? ManagedCopyType = null);
+    string? ManagedCopyType = null,
+    bool HasManagedMetadataIssue = false,
+    string? ManagedMetadataIssue = null);
 
 public sealed record LogicalEventGroup(
     string GroupKey,
@@ -58,7 +60,18 @@ public static class EventCorrelation
         var observations = events.ToArray();
         var results = new List<LogicalEventGroup>();
 
-        foreach (var observation in observations.Where(item => item.IsRecurring))
+        foreach (var observation in observations.Where(item => item.HasManagedMetadataIssue))
+        {
+            results.Add(CreateUnresolvedGroup(
+                observation,
+                AlignmentState.Conflict,
+                string.IsNullOrWhiteSpace(observation.ManagedMetadataIssue)
+                    ? "Outlook Aligner metadata on this item cannot be trusted; correlation and alignment actions are blocked."
+                    : observation.ManagedMetadataIssue));
+        }
+
+        foreach (var observation in observations.Where(item =>
+                     !item.HasManagedMetadataIssue && item.IsRecurring))
         {
             results.Add(CreateUnresolvedGroup(
                 observation,
@@ -67,7 +80,9 @@ public static class EventCorrelation
         }
 
         foreach (var observation in observations.Where(item =>
-                     !item.IsRecurring && string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item))))
+                     !item.HasManagedMetadataIssue
+                     && !item.IsRecurring
+                     && string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item))))
         {
             results.Add(CreateUnresolvedGroup(
                 observation,
@@ -78,7 +93,10 @@ public static class EventCorrelation
         }
 
         var correlated = observations
-            .Where(item => !item.IsRecurring && !string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item)))
+            .Where(item =>
+                !item.HasManagedMetadataIssue
+                && !item.IsRecurring
+                && !string.IsNullOrWhiteSpace(GetCorrelationGlobalAppointmentId(item)))
             .GroupBy(item => GetCorrelationGlobalAppointmentId(item)!, StringComparer.Ordinal)
             .Select(group => BuildCorrelatedGroup(group.Key, group.ToArray(), expectedAccounts));
 
