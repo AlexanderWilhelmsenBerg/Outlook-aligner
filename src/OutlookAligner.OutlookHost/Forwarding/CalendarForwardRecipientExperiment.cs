@@ -153,6 +153,24 @@ internal static class CalendarForwardRecipientExperiment
                 ? $" Subject: {appointment.Subject ?? "(no subject)"}."
                 : string.Empty;
 
+            if (options.Action == ForwardSpikeAction.SendCalendarCommand)
+            {
+                ((OutlookInterop._MeetingItem)forwardedMeeting).Send();
+                sent = true;
+
+                return new ForwardSpikeResult(
+                    0,
+                    $"Outlook's Calendar Forward created a native MeetingItem, exactly one recipient resolved, SendUsingAccount was pinned to the selected source account, and MeetingItem.Send() completed.{subjectSuffix}",
+                    options.SourceSmtp,
+                    options.GlobalAppointmentId,
+                    options.Action,
+                    options.Recipient,
+                    Array.Empty<string>(),
+                    Array.Empty<ForwardCandidateInfo>(),
+                    commandProbe,
+                    warnings);
+            }
+
             return new ForwardSpikeResult(
                 0,
                 $"Outlook's Calendar Forward created a native MeetingItem, exactly one recipient resolved, and SendUsingAccount was pinned to the selected source account. The forwarded meeting was not sent and will be discarded.{subjectSuffix}",
