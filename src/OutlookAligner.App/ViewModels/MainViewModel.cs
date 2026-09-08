@@ -11,8 +11,11 @@ namespace OutlookAligner.App.ViewModels;
 public sealed class MainViewModel : ObservableObject
 {
     private readonly OutlookHostProcessClient _hostClient = new();
+    private readonly Dictionary<string, string> _authorityByGroupKey = new(StringComparer.Ordinal);
     private CalendarEventRowViewModel? _selectedEvent;
+    private AlignmentGroupViewModel? _selectedAlignmentGroup;
     private OutlookAccountChoice? _selectedTargetAccount;
+    private AuthorityChoice? _selectedAuthority;
     private double _scanDays = 90;
     private bool _isBusy;
     private bool _hasNotice;
@@ -21,6 +24,7 @@ public sealed class MainViewModel : ObservableObject
     private string _lastDiagnostics = "No diagnostics yet.";
     private string _selectedEventDiagnostics = "Select a calendar item to inspect its Outlook identity.";
     private string _alignmentSummary = "Refresh Outlook to build the alignment view.";
+    private string _authorityStatus = "Select a logical event to inspect authority.";
     private string _noticeMessage = string.Empty;
 
     public MainViewModel()
@@ -37,6 +41,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<OutlookAccountChoice> TargetAccounts { get; } = [];
 
     public ObservableCollection<AlignmentGroupViewModel> AlignmentGroups { get; } = [];
+
+    public ObservableCollection<AuthorityChoice> AuthorityChoices { get; } = [];
 
     public AsyncRelayCommand RefreshCommand { get; }
 
@@ -61,6 +67,20 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public AlignmentGroupViewModel? SelectedAlignmentGroup
+    {
+        get => _selectedAlignmentGroup;
+        set
+        {
+            if (!SetProperty(ref _selectedAlignmentGroup, value))
+            {
+                return;
+            }
+
+            UpdateAuthorityChoices();
+        }
+    }
+
     public OutlookAccountChoice? SelectedTargetAccount
     {
         get => _selectedTargetAccount;
@@ -70,6 +90,36 @@ public sealed class MainViewModel : ObservableObject
             {
                 NotifyCommandStateChanged();
             }
+        }
+    }
+
+    public AuthorityChoice? SelectedAuthority
+    {
+        get => _selectedAuthority;
+        set
+        {
+            if (!SetProperty(ref _selectedAuthority, value))
+            {
+                return;
+            }
+
+            var group = SelectedAlignmentGroup;
+            if (group is null)
+            {
+                AuthorityStatus = "Select a logical event to inspect authority.";
+                return;
+            }
+
+            if (value is null)
+            {
+                AuthorityStatus = group.CanChooseAuthority
+                    ? "Authority is unknown. Choose the account that should control alignment."
+                    : BuildUnavailableAuthorityStatus(group);
+                return;
+            }
+
+            _authorityByGroupKey[group.GroupKey] = value.AccountKey;
+            AuthorityStatus = $"Authority: {value.AccountKey} · User selected for this session.";
         }
     }
 
@@ -129,6 +179,12 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _alignmentSummary;
         private set => SetProperty(ref _alignmentSummary, value);
+    }
+
+    public string AuthorityStatus
+    {
+        get => _authorityStatus;
+        private set => SetProperty(ref _authorityStatus, value);
     }
 
     public string NoticeMessage
@@ -321,6 +377,45 @@ public sealed class MainViewModel : ObservableObject
                                 ?? TargetAccounts.FirstOrDefault();
     }
 
+    private void UpdateAuthorityChoices()
+    {
+        AuthorityChoices.Clear();
+        _selectedAuthority = null;
+        OnPropertyChanged(nameof(SelectedAuthority));
+
+        var group = SelectedAlignmentGroup;
+        if (group is null)
+        {
+            AuthorityStatus = "Select a logical event to inspect authority.";
+            return;
+        }
+
+        if (!group.CanChooseAuthority)
+        {
+            AuthorityStatus = BuildUnavailableAuthorityStatus(group);
+            return;
+        }
+
+        foreach (var accountKey in group.Group.Members
+                     .Select(member => member.AccountKey)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(account => account, StringComparer.OrdinalIgnoreCase))
+        {
+            AuthorityChoices.Add(new AuthorityChoice(accountKey));
+        }
+
+        if (_authorityByGroupKey.TryGetValue(group.GroupKey, out var savedAccountKey))
+        {
+            SelectedAuthority = AuthorityChoices.FirstOrDefault(choice =>
+                string.Equals(choice.AccountKey, savedAccountKey, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (SelectedAuthority is null)
+        {
+            AuthorityStatus = "Authority is unknown. Choose the account that should control alignment.";
+        }
+    }
+
     private void RebuildAlignmentGroups(
         OutlookProbeResult result,
         CalendarEventRowViewModel[] eventRows)
@@ -352,6 +447,9 @@ public sealed class MainViewModel : ObservableObject
         {
             AlignmentGroups.Add(new AlignmentGroupViewModel(group));
         }
+
+        SelectedAlignmentGroup = AlignmentGroups.FirstOrDefault(group => group.NeedsAttention)
+                                 ?? AlignmentGroups.FirstOrDefault();
 
         var attention = groups.Count(group => group.State != AlignmentState.Aligned);
         var aligned = groups.Count - attention;
@@ -404,4 +502,13 @@ public sealed class MainViewModel : ObservableObject
             $"StoreID: {selectedEvent.Account.StoreId ?? "(unavailable)"}",
             $"Recurrence: {selectedEvent.RecurrenceDisplay}");
     }
+
+    private static string BuildUnavailableAuthorityStatus(AlignmentGroupViewModel group)
+        => group.Group.State switch
+        {
+            AlignmentState.RecurrenceIdentityUnresolved => "Authority is disabled until recurrence identity is proven.",
+            AlignmentState.Uncorrelated => "Authority is disabled because this item is not safely correlated.",
+            AlignmentState.Duplicate => "Authority is disabled while duplicate copies are unresolved.",
+            _ => "Authority cannot be selected for this logical event yet.",
+        };
 }
