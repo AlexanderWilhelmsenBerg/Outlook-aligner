@@ -3,6 +3,7 @@ namespace OutlookAligner.OutlookHost.Forwarding;
 internal enum ForwardSpikeAction
 {
     Inspect,
+    ProbeCalendarCommand,
     Prepare,
     Send,
 }
@@ -11,6 +12,7 @@ internal sealed record ForwardSpikeOptions(
     string SourceSmtp,
     string GlobalAppointmentId,
     ForwardSpikeAction Action,
+    string? CalendarEntryId,
     string? Recipient,
     bool IncludeDetails,
     bool ShowHelp)
@@ -30,10 +32,12 @@ internal sealed record ForwardSpikeOptions(
     {
         string? sourceSmtp = null;
         string? globalAppointmentId = null;
+        string? calendarEntryId = null;
         string? recipient = null;
         string? confirmation = null;
         var includeDetails = false;
         var showHelp = false;
+        var probeCalendarCommand = false;
         var prepare = false;
         var send = false;
 
@@ -43,6 +47,12 @@ internal sealed record ForwardSpikeOptions(
 
             if (string.Equals(argument, "--forward-spike", StringComparison.OrdinalIgnoreCase))
             {
+                continue;
+            }
+
+            if (string.Equals(argument, "--probe-calendar-command", StringComparison.OrdinalIgnoreCase))
+            {
+                probeCalendarCommand = true;
                 continue;
             }
 
@@ -93,6 +103,17 @@ internal sealed record ForwardSpikeOptions(
                 continue;
             }
 
+            if (MatchesOption(argument, "--entry-id"))
+            {
+                if (!TryReadValue(args, ref index, "--entry-id", argument, out calendarEntryId, out error))
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                continue;
+            }
+
             if (MatchesOption(argument, "--to"))
             {
                 if (!TryReadValue(args, ref index, "--to", argument, out recipient, out error))
@@ -127,16 +148,18 @@ internal sealed record ForwardSpikeOptions(
                 string.Empty,
                 ForwardSpikeAction.Inspect,
                 null,
+                null,
                 includeDetails,
                 ShowHelp: true);
             error = null;
             return true;
         }
 
-        if (prepare && send)
+        var requestedActions = (probeCalendarCommand ? 1 : 0) + (prepare ? 1 : 0) + (send ? 1 : 0);
+        if (requestedActions > 1)
         {
             options = Empty();
-            error = "--prepare and --send are mutually exclusive.";
+            error = "--probe-calendar-command, --prepare, and --send are mutually exclusive.";
             return false;
         }
 
@@ -158,7 +181,24 @@ internal sealed record ForwardSpikeOptions(
             ? ForwardSpikeAction.Send
             : prepare
                 ? ForwardSpikeAction.Prepare
-                : ForwardSpikeAction.Inspect;
+                : probeCalendarCommand
+                    ? ForwardSpikeAction.ProbeCalendarCommand
+                    : ForwardSpikeAction.Inspect;
+
+        if (action == ForwardSpikeAction.ProbeCalendarCommand
+            && string.IsNullOrWhiteSpace(calendarEntryId))
+        {
+            options = Empty();
+            error = "--entry-id is required with --probe-calendar-command.";
+            return false;
+        }
+
+        if (action != ForwardSpikeAction.ProbeCalendarCommand && calendarEntryId is not null)
+        {
+            options = Empty();
+            error = "--entry-id is valid only together with --probe-calendar-command.";
+            return false;
+        }
 
         if (action is ForwardSpikeAction.Prepare or ForwardSpikeAction.Send
             && string.IsNullOrWhiteSpace(recipient))
@@ -187,6 +227,7 @@ internal sealed record ForwardSpikeOptions(
             sourceSmtp,
             globalAppointmentId,
             action,
+            calendarEntryId,
             recipient,
             includeDetails,
             ShowHelp: false);
@@ -238,6 +279,7 @@ internal sealed record ForwardSpikeOptions(
             string.Empty,
             string.Empty,
             ForwardSpikeAction.Inspect,
+            null,
             null,
             IncludeDetails: false,
             ShowHelp: false);
