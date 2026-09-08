@@ -52,9 +52,7 @@ jobs:
           -c Release
           -r win-x64
           --self-contained true
-          -p:PublishSingleFile=true
           -p:PublishTrimmed=false
-          -p:IncludeAllContentForSelfExtract=true
           -p:DebugType=None
           -p:DebugSymbols=false
           --output artifacts/app
@@ -64,6 +62,26 @@ jobs:
           Copy-Item .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe .\artifacts\app\OutlookAligner.OutlookHost.exe -Force
           if (-not (Test-Path .\artifacts\app\OutlookAligner.App.exe)) { throw "WinUI app executable missing" }
           if (-not (Test-Path .\artifacts\app\OutlookAligner.OutlookHost.exe)) { throw "OutlookHost executable missing from UI bundle" }
+      - name: Smoke test WinUI startup
+        shell: pwsh
+        run: |
+          $logPath = Join-Path $env:LOCALAPPDATA "OutlookAligner\startup.log"
+          if (Test-Path $logPath) { Remove-Item $logPath -Force }
+
+          $process = Start-Process -FilePath .\artifacts\app\OutlookAligner.App.exe -PassThru
+          Start-Sleep -Seconds 5
+          $process.Refresh()
+
+          if ($process.HasExited) {
+            if (Test-Path $logPath) {
+              Write-Host "--- OutlookAligner startup.log ---"
+              Get-Content $logPath
+              Write-Host "--- end startup.log ---"
+            }
+            throw "WinUI app exited during startup with code $($process.ExitCode)"
+          }
+
+          Stop-Process -Id $process.Id -Force
       - name: Upload Phase 3 UI test harness
         uses: actions/upload-artifact@v7.0.1
         with:
