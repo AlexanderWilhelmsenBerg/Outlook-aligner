@@ -52,7 +52,15 @@
                             </StackPanel>
                         </Grid>
 
-                        <TextBlock Grid.Row="1" Opacity="0.75" Text="{Binding Status}" TextWrapping="Wrap" />
+                        <StackPanel Grid.Row="1" Spacing="8">
+                            <TextBlock Opacity="0.75" Text="{Binding Status}" TextWrapping="Wrap" />
+                            <InfoBar
+                                IsClosable="False"
+                                IsOpen="{Binding HasNotice}"
+                                Message="{Binding NoticeMessage}"
+                                Severity="Warning"
+                                Title="Outlook notice" />
+                        </StackPanel>
 
                         <Grid Grid.Row="2" ColumnSpacing="20">
                             <Grid.ColumnDefinitions>
@@ -180,7 +188,15 @@
                             <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="Refresh Outlook" VerticalAlignment="Center" />
                         </Grid>
 
-                        <TextBlock Grid.Row="1" Opacity="0.8" Text="{Binding AlignmentSummary}" TextWrapping="Wrap" />
+                        <StackPanel Grid.Row="1" Spacing="8">
+                            <TextBlock Opacity="0.8" Text="{Binding AlignmentSummary}" TextWrapping="Wrap" />
+                            <InfoBar
+                                IsClosable="False"
+                                IsOpen="{Binding HasNotice}"
+                                Message="{Binding NoticeMessage}"
+                                Severity="Warning"
+                                Title="Outlook notice" />
+                        </StackPanel>
 
                         <ListView Grid.Row="2" ItemsSource="{Binding AlignmentGroups}" SelectionMode="None">
                             <ListView.ItemTemplate>
