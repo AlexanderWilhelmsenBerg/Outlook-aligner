@@ -25,8 +25,8 @@ public sealed class CalendarEventRowViewModel
         : $"{CalendarEvent.StartLocal:g} – {CalendarEvent.EndLocal:g}";
 
     public string RecurrenceDisplay => CalendarEvent.IsRecurring
-        ? $"Recurring · {CalendarEvent.RecurrenceState}"
-        : "Single event";
+        ? $"Recurring · {MeetingStatusDisplay} · {CalendarEvent.RecurrenceState}"
+        : $"Single event · {MeetingStatusDisplay}";
 
     public string Location => string.IsNullOrWhiteSpace(CalendarEvent.Location) ? "—" : CalendarEvent.Location;
 
