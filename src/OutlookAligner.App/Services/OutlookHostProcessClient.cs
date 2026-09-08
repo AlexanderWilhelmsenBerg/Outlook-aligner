@@ -12,6 +12,13 @@ internal sealed class OutlookHostProcessClient
         PropertyNameCaseInsensitive = true,
     };
 
+    private readonly string? _hostPathOverride;
+
+    internal OutlookHostProcessClient(string? hostPathOverride = null)
+    {
+        _hostPathOverride = hostPathOverride;
+    }
+
     internal async Task<OutlookProbeResult> ScanAsync(int days, CancellationToken cancellationToken = default)
     {
         var result = await RunAsync(
@@ -66,7 +73,7 @@ internal sealed class OutlookHostProcessClient
             ],
             cancellationToken);
 
-    private static async Task<HostCommandResult> RunAsync(
+    private async Task<HostCommandResult> RunAsync(
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken)
     {
@@ -108,12 +115,17 @@ internal sealed class OutlookHostProcessClient
         return new HostCommandResult(process.ExitCode, standardOutput.Trim(), standardError.Trim());
     }
 
-    private static string ResolveHostPath()
+    private string ResolveHostPath()
     {
-        var overridePath = Environment.GetEnvironmentVariable("OUTLOOK_ALIGNER_HOST_PATH");
-        if (!string.IsNullOrWhiteSpace(overridePath) && File.Exists(overridePath))
+        if (!string.IsNullOrWhiteSpace(_hostPathOverride) && File.Exists(_hostPathOverride))
         {
-            return overridePath;
+            return _hostPathOverride;
+        }
+
+        var environmentPath = Environment.GetEnvironmentVariable("OUTLOOK_ALIGNER_HOST_PATH");
+        if (!string.IsNullOrWhiteSpace(environmentPath) && File.Exists(environmentPath))
+        {
+            return environmentPath;
         }
 
         var siblingPath = Path.Combine(AppContext.BaseDirectory, "OutlookAligner.OutlookHost.exe");
