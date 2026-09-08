@@ -9,4 +9,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Office.Interop.Outlook" />
   </ItemGroup>
+  <Target Name="EmbedOutlookInteropTypes"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="FindReferenceAssembliesForReferences">
+    <ItemGroup>
+      <ReferencePath Condition="'%(FileName)' == 'Microsoft.Office.Interop.Outlook' AND '%(ReferencePath.NuGetPackageId)' == 'Microsoft.Office.Interop.Outlook'">
+        <EmbedInteropTypes>true</EmbedInteropTypes>
+      </ReferencePath>
+    </ItemGroup>
+  </Target>
 </Project>

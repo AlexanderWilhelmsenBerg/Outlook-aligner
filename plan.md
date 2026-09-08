@@ -1,6 +1,6 @@
 # Outlook Aligner — Implementation Plan
 
-Status: **Phase 0 complete ✅. Phase 1 is the next PR-only implementation phase.**
+Status: **Phase 0 complete ✅. Phase 1 is in progress 🚧 on PR #4.**
 
 Last reviewed: 2026-09-07
 
@@ -275,7 +275,7 @@ Pure Core/Persistence/contract tests run without Outlook. Windows CI also builds
 
 ### Manual Outlook integration
 
-A downloadable diagnostic executable is produced from Phase 1 onward. Manual scenarios include account discovery, bounded recurrence scans, Teams meetings, all-day events, DST boundaries, Outlook restart, unavailable stores, and repeated scans.
+A downloadable diagnostic executable is produced from successful Phase 1 CI onward. Manual scenarios include account discovery, bounded recurrence scans, Teams meetings, all-day events, DST boundaries, Outlook cold start/restart, unavailable stores, and repeated scans. Passing the real three-account Classic Outlook suite is a Phase 1 merge gate.
 
 A dedicated self-hosted Outlook integration runner may be added later but is not required initially.
 
@@ -298,7 +298,7 @@ Every pull request targeting `main` must pass:
 13. Vite production build;
 14. npm production vulnerability audit.
 
-From Phase 1, CI additionally publishes a self-contained Windows x64 Outlook probe executable and uploads it as a GitHub Actions artifact for manual testing.
+From Phase 1, successful CI additionally publishes a self-contained Windows x64 Outlook probe executable and uploads it as a GitHub Actions artifact for manual testing.
 
 Dependabot checks NuGet, npm, and GitHub Actions weekly. Dependency PRs are not auto-merged.
 
@@ -337,7 +337,7 @@ Acceptance evidence:
 
 **Branch policy:** Phase 1 and every later implementation phase is PR-only. Do not merge without explicit user instruction.
 
-### Phase 1 — Outlook COM discovery/read probe — **In progress 🚧 / PR required**
+### Phase 1 — Outlook COM discovery/read probe — **In progress 🚧 / PR #4**
 
 Implement only read-only behavior:
 
@@ -346,15 +346,16 @@ Implement only read-only behavior:
 - enumerate accounts and stores;
 - locate each account's default Calendar;
 - read a configurable bounded date range (default 90 days);
+- use half-open overlap semantics (`eventEnd > windowStart` and `eventStart < windowEnd`);
 - expand recurrences only inside the bound;
 - extract plain account/store/event DTOs;
-- expose privacy-safe console/JSON diagnostics;
+- expose privacy-safe console/JSON diagnostics with defensive output redaction;
 - release COM references deterministically;
 - never save, send, forward, delete, or modify Outlook data.
 
 Phase 1 build artifact:
 
-- CI publishes `OutlookAligner.OutlookHost` for `win-x64` as a self-contained single-file executable;
+- successful CI publishes `OutlookAligner.OutlookHost` for `win-x64` as a self-contained single-file executable;
 - artifact name: `OutlookAligner-Phase1-Probe-win-x64`;
 - latest stable `actions/upload-artifact@v7.0.1` is used;
 - the artifact is intended for manual testing on a Windows machine with Classic Outlook and the three-account profile configured.
@@ -367,9 +368,12 @@ Acceptance:
 - [ ] default Calendar is located for each usable account;
 - [ ] bounded calendar items can be read repeatedly;
 - [ ] recurring events remain bounded to the requested horizon;
-- [ ] default output does not disclose event subject/body/location;
+- [ ] half-open lower/upper window boundaries behave correctly;
+- [ ] default console and JSON output do not disclose event subject/body/location;
+- [ ] Outlook already-running and cold-start paths both work;
 - [ ] no Outlook data is written;
-- [ ] repeated manual scans do not destabilize Outlook.
+- [ ] repeated manual scans do not destabilize Outlook;
+- [ ] the full manual merge-gate checklist in `docs/phase-1.md` passes on the real Classic Outlook profile.
 
 ### Phase 2 — Forwarding technical spike
 
@@ -441,4 +445,4 @@ Primary sources are Microsoft Learn, .NET release/download pages, NuGet package 
 
 ## 15. Next action
 
-Phase 0 is closed. Begin **Phase 1 on a feature branch and pull request**, produce the read-only Outlook probe executable artifact, and use the manual results from the user's real Classic Outlook profile to decide whether Phase 1 acceptance is satisfied. Phase 2 follows only after Phase 1 is tested and merged by the user.
+Finish **Phase 1 on PR #4**: get hosted CI fully green, produce the downloadable read-only probe executable, run the documented merge-gate suite against the user's real three-account Classic Outlook profile, and merge only when the user explicitly requests it. Phase 2 follows only after Phase 1 is tested and merged.
