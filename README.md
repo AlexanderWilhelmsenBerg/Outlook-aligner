@@ -51,7 +51,7 @@ The v1 GUI is not optional. `OutlookAligner.App` will provide a WinUI 3 `Navigat
 
 Normal v1 operation must not require PowerShell or CLI arguments. Write actions will be capability-driven, and bulk writes require preview + explicit confirmation. The detailed UI/UX and Phase 4 acceptance contract is in [`docs/ui.md`](docs/ui.md).
 
-For **Forward meeting**, the production GUI should treat native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events must fail closed with a clear explanation.
+For **Forward meeting**, the production GUI treats native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events fail closed with a clear explanation. The retained-request diagnostic path is not exposed as a separate user-facing action.
 
 ## Verified toolchain baseline
 
