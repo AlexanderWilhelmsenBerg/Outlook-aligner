@@ -92,9 +92,13 @@ internal static class Program
 
         try
         {
-            var result = options.Action == ForwardSpikeAction.PrepareCalendarCommand
-                ? CalendarForwardCommandExperiment.Run(options)
-                : NativeMeetingForwardSpike.Run(options);
+            var result = options.Action switch
+            {
+                ForwardSpikeAction.PrepareCalendarCommand => CalendarForwardCommandExperiment.Run(options),
+                ForwardSpikeAction.PrepareCalendarRecipient => CalendarForwardRecipientExperiment.Run(options),
+                _ => NativeMeetingForwardSpike.Run(options),
+            };
+
             ForwardSpikeOutput.Write(result, options.IncludeDetails);
             return result.ExitCode;
         }
