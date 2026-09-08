@@ -2,7 +2,7 @@
 
 Outlook Aligner is a **WinUI 3 Windows desktop application** for comparing and deliberately aligning calendar events across multiple accounts in one Classic Outlook profile.
 
-The command-line tools used in the early technical phases are diagnostic/test harnesses only. The shipped v1 product requires a graphical interface; see [`docs/ui.md`](docs/ui.md).
+The command-line tools used in the early technical phases are diagnostic/test harnesses only. Normal product use is moving into the WinUI application shell; see [`docs/ui.md`](docs/ui.md).
 
 ## Integration boundary
 
@@ -12,44 +12,48 @@ The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL 
 
 - **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
 - **Phase 1 — Outlook COM discovery/read probe: Complete ✅ / merged in PR #4**
-- **Phase 2 — Native meeting-forwarding technical spike: end-to-end mechanism proven; reliability matrix in progress 🚧 / PR #5**
-- **Phase 4 — Production WinUI GUI: required for v1; specified now, implemented after identity work**
+- **Phase 2 — Native meeting forwarding: Complete ✅ / merged in PR #5**
+- **Phase 3 — WinUI read/alignment foundation: In progress 🚧**
 
 Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
 
 Phase 1 proved the packaged Classic Outlook COM read boundary on the user's real Windows/Outlook profile, including the self-contained interop packaging fix discovered during manual testing. See [`docs/phase-1.md`](docs/phase-1.md).
 
-## Phase 2 result so far
+Phase 2 proved genuine Classic Outlook native forwarding for accepted Calendar meetings through Outlook's built-in Forward command and was merged in PR #5. The product does not silently substitute `ForwardAsVcal()`/ICS. See [`docs/phase-2.md`](docs/phase-2.md).
 
-Phase 2 has proven a genuine native forwarding path on a real accepted Classic Outlook meeting even when the original meeting request is no longer retained in Inbox/Deleted Items.
+## Current Phase 3 increment
 
-The proven path is:
+The current `phase-3/ui-assisted-testing` branch intentionally stops at a **read-only alignment foundation plus safe Forward preparation** rather than trying to finish the entire phase in one PR.
 
-```text
-accepted Calendar AppointmentItem
-  -> verify Outlook built-in Forward capability
-  -> ExecuteMso("Forward")
-  -> AppointmentItem.Forward event
-  -> native MeetingItem (IPM.Schedule.Meeting.Request)
-  -> exactly one resolved recipient
-  -> SendUsingAccount = selected source account
-  -> MeetingItem.Send()
-```
+It currently provides:
 
-A real Kverneland meeting was forwarded to another user-controlled Outlook account and arrived there as a forwarded meeting. No `AppointmentItem.ForwardAsVcal()` or fake ICS fallback is used.
+- a real unpackaged WinUI 3 `App.xaml` / `MainWindow` application;
+- NavigationView destinations for Calendar, Alignment, Settings and Diagnostics;
+- automatic OutlookHost launch and protocol-version validation;
+- bounded account/calendar discovery from the GUI;
+- selected-event native Forward capability checks;
+- **Prepare Forward (discard)** using the proven native Outlook forwarding path, with no send action in this increment;
+- preliminary logical-event correlation for non-recurring events;
+- explicit `Aligned`, `Missing`, `Moved`, `DetailsDifferent`, `Duplicate`, `Conflict`, recurrence-unresolved and uncorrelated states;
+- read-only Outlook Aligner managed-copy metadata detection;
+- fail-closed handling of incomplete, unsupported or unreadable managed-copy metadata;
+- `KnownOrigin` authority inference only from internally consistent validated managed-copy provenance;
+- session-only user authority selection when origin is not known;
+- a **preview-only Move Selected plan** that can target validated managed copies but cannot execute Outlook writes;
+- a self-contained Windows CI artifact containing the UI and OutlookHost.
 
-Delivery itself is proven. Target-side validation of normal meeting controls/Teams behavior where applicable, plus a deliberately small reliability matrix covering recurrence and another source account, remains before Phase 2 closes. See [`docs/phase-2.md`](docs/phase-2.md).
+Recurring events remain deliberately unresolved for identity/correlation. Copy writes, Move writes, real Forward send from the GUI, persistence, operation history and production IPC are not part of this increment.
 
-## Production UI
+## Production UI direction
 
-The v1 GUI is not optional. `OutlookAligner.App` will provide a WinUI 3 `NavigationView` shell with:
+The v1 GUI uses a WinUI 3 `NavigationView` shell with:
 
-- **Calendar** — primary synchronized three-account calendar, event selection and comparison;
-- **Alignment** — discrepancy queue, filters, authority and safe actions;
+- **Calendar** — primary multi-account calendar and event selection;
+- **Alignment** — discrepancy queue, authority and safe previews/actions;
 - **Settings** — horizon, privacy and UI preferences;
-- **Diagnostics** — Outlook/IPC health, operation history and technical identifiers.
+- **Diagnostics** — Outlook/host health, operation history and technical identifiers.
 
-Normal v1 operation must not require PowerShell or CLI arguments. Write actions will be capability-driven, and bulk writes require preview + explicit confirmation. The detailed UI/UX and Phase 4 acceptance contract is in [`docs/ui.md`](docs/ui.md).
+Normal v1 operation must not require PowerShell or CLI arguments. Write actions are capability-driven, and bulk writes require preview + explicit confirmation. The detailed UI/UX contract is in [`docs/ui.md`](docs/ui.md).
 
 For **Forward meeting**, the production GUI treats native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events fail closed with a clear explanation. The retained-request diagnostic path is not exposed as a separate user-facing action.
 
@@ -79,12 +83,13 @@ Run:
 ./scripts/verify.ps1
 ```
 
-Classic Outlook is required for live Phase 1/2 COM testing, not for normal hosted build/unit-test gates.
+Classic Outlook is required for live COM/manual acceptance testing, not for normal hosted build/unit-test gates.
 
 ## Documentation
 
 - [`plan.md`](plan.md) — product, architecture, safety rules, phases, and acceptance criteria.
-- [`docs/ui.md`](docs/ui.md) — required production GUI/interaction contract.
+- [`docs/ui.md`](docs/ui.md) — production GUI/interaction contract and current implementation boundary.
 - [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
 - [`docs/phase-1.md`](docs/phase-1.md) — completed read-only Outlook probe and packaging lessons.
-- [`docs/phase-2.md`](docs/phase-2.md) — native meeting-forwarding spike design, real-machine evidence, and remaining reliability matrix.
+- [`docs/phase-2.md`](docs/phase-2.md) — completed native meeting-forwarding spike and real-machine evidence.
+- [`docs/phase-3.md`](docs/phase-3.md) — current UI-assisted development/read-alignment increment.
