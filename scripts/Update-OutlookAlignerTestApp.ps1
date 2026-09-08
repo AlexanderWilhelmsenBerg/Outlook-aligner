@@ -68,19 +68,24 @@ $createdAt = [DateTimeOffset]$run.createdAt
 $runUrl = [string]$run.url
 
 $metadataPath = Join-Path $InstallDirectory ".installed-run.json"
+$existingApp = Join-Path $InstallDirectory "OutlookAligner.App.exe"
+$existingHost = Join-Path $InstallDirectory "OutlookAligner.OutlookHost.exe"
 if (-not $Force -and (Test-Path $metadataPath)) {
     try {
         $installed = Get-Content $metadataPath -Raw | ConvertFrom-Json
-        if ([long]$installed.runId -eq $runId -and [string]$installed.headSha -eq $headSha) {
+        $sameBuild = [long]$installed.runId -eq $runId -and [string]$installed.headSha -eq $headSha
+        $installComplete = (Test-Path $existingApp) -and (Test-Path $existingHost)
+        if ($sameBuild -and $installComplete) {
             Write-Host "Already current: CI run $runId ($($headSha.Substring(0, [Math]::Min(12, $headSha.Length))))." -ForegroundColor Green
             if (-not $NoLaunch) {
-                $existingExe = Join-Path $InstallDirectory "OutlookAligner.App.exe"
-                if (Test-Path $existingExe) {
-                    Write-Step "Launching Outlook Aligner"
-                    Start-Process -FilePath $existingExe
-                }
+                Write-Step "Launching Outlook Aligner"
+                Start-Process -FilePath $existingApp
             }
             return
+        }
+
+        if ($sameBuild -and -not $installComplete) {
+            Write-Warning "The installed run metadata is current, but one or more required executables are missing. Reinstalling the build."
         }
     }
     catch {
