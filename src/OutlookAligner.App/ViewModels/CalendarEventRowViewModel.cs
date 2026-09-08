@@ -30,10 +30,57 @@ public sealed class CalendarEventRowViewModel
 
     public string Location => string.IsNullOrWhiteSpace(CalendarEvent.Location) ? "—" : CalendarEvent.Location;
 
+    public string MeetingStatusDisplay => CalendarEvent.MeetingStatus switch
+    {
+        "olNonMeeting" => "Appointment (not a meeting)",
+        "olMeeting" => "Meeting",
+        "olMeetingReceived" => "Received meeting",
+        "olMeetingCanceled" => "Canceled meeting",
+        "olMeetingReceivedAndCanceled" => "Received canceled meeting",
+        _ => CalendarEvent.MeetingStatus,
+    };
+
     public bool HasForwardIdentity
         => !string.IsNullOrWhiteSpace(Account.SmtpAddress)
             && !string.IsNullOrWhiteSpace(CalendarEvent.EntryId)
             && !string.IsNullOrWhiteSpace(CalendarEvent.GlobalAppointmentId);
+
+    public bool CanUseNativeForward
+        => HasForwardIdentity
+            && !CalendarEvent.IsRecurring
+            && CalendarEvent.MeetingStatus is not "olNonMeeting"
+            && CalendarEvent.MeetingStatus is not "olMeetingCanceled"
+            && CalendarEvent.MeetingStatus is not "olMeetingReceivedAndCanceled";
+
+    public string ForwardEligibilityLabel => CanUseNativeForward ? "Not checked" : "Not available for this item";
+
+    public string ForwardEligibilityMessage
+    {
+        get
+        {
+            if (!HasForwardIdentity)
+            {
+                return "Outlook did not provide enough native identity for safe meeting Forward.";
+            }
+
+            if (CalendarEvent.MeetingStatus == "olNonMeeting")
+            {
+                return "This is an Outlook appointment without meeting attendees. Meeting Forward does not apply.";
+            }
+
+            if (CalendarEvent.MeetingStatus is "olMeetingCanceled" or "olMeetingReceivedAndCanceled")
+            {
+                return "This meeting is canceled, so Outlook Aligner will not prepare a Forward action.";
+            }
+
+            if (CalendarEvent.IsRecurring)
+            {
+                return "Recurring meeting Forward is intentionally disabled in this increment until occurrence-versus-series identity is implemented safely.";
+            }
+
+            return "This one-off meeting can be checked against Outlook's native Forward capability.";
+        }
+    }
 }
 
 public sealed class OutlookAccountChoice
