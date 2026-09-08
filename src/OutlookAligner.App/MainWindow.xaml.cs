@@ -42,10 +42,7 @@ public sealed partial class MainWindow : Window
         var tag = args.SelectedItemContainer?.Tag as string;
         CalendarPanel.Visibility = tag == "calendar" ? Visibility.Visible : Visibility.Collapsed;
         AlignmentPanel.Visibility = tag == "alignment" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPanel.Visibility = tag == "settings" ? Visibility.Visible : Visibility.Collapsed;
         DiagnosticsPanel.Visibility = tag == "diagnostics" ? Visibility.Visible : Visibility.Collapsed;
-
-        var isPlaceholder = tag == "settings";
-        PlaceholderPanel.Visibility = isPlaceholder ? Visibility.Visible : Visibility.Collapsed;
-        PlaceholderTitle.Text = isPlaceholder ? "Settings" : string.Empty;
     }
 }
