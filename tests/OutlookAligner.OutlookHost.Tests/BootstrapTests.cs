@@ -130,7 +130,7 @@ public sealed class BootstrapTests
         var filter = OutlookDateFilter.Build(start, end, culture);
 
         Assert.Contains(start.ToString("g", culture), filter, StringComparison.Ordinal);
-        Assert.Contains(end.ToString("g", culture), StringComparison.Ordinal);
+        Assert.Contains(end.ToString("g", culture), filter, StringComparison.Ordinal);
         Assert.Contains("[End] >", filter, StringComparison.Ordinal);
         Assert.Contains("[Start] <", filter, StringComparison.Ordinal);
     }
