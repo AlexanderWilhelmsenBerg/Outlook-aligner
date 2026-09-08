@@ -1,41 +1,44 @@
 # Phase 2 — Native Meeting Forwarding Technical Spike
 
-Status: **In progress 🚧 — pull request only**
+Status: **In progress 🚧 — PR #5 only**
 
 Started: 2026-09-08
 
 ## Purpose
 
-Phase 2 proves whether Outlook Aligner can reproduce **genuine Classic Outlook meeting forwarding** for an accepted meeting. This phase deliberately does not treat a vCalendar attachment as equivalent.
+Determine whether Outlook Aligner can honestly provide **genuine Classic Outlook meeting forwarding** for accepted meetings.
 
-Microsoft's Outlook Object Model exposes three facts that define the spike:
+The product must never label `AppointmentItem.ForwardAsVcal()` as equivalent native forwarding.
 
-- `MeetingItem.Forward()` executes Outlook's native Forward action and returns a new `MeetingItem`.
-- `MeetingItem.GetAssociatedAppointment(false)` returns the appointment associated with a meeting request without adding a new calendar item.
-- `AppointmentItem.ForwardAsVcal()` only creates a mail item with a vCalendar attachment, so it is not an acceptable substitute for native meeting forwarding.
+## Outlook facts driving the spike
+
+Microsoft documents that:
+
+- `MeetingItem.Forward()` executes Outlook's native Forward action and returns a new `MeetingItem`;
+- `MeetingItem.GetAssociatedAppointment(false)` maps a retained meeting request back to its calendar appointment without adding an item;
+- an accepted calendar meeting is represented as `AppointmentItem`;
+- `AppointmentItem` exposes a `Forward` **event** when the user invokes Outlook's Forward action, but does not expose an equivalent native Forward method;
+- Classic Outlook itself can forward an accepted meeting directly from Calendar;
+- `CommandBars.ExecuteMso(idMso)` can invoke a built-in Office command when the object model has no direct method.
 
 Primary references:
 
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.meetingitem.forward%28method%29
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.meetingitem.getassociatedappointment
+- https://learn.microsoft.com/en-us/office/vba/api/outlook.appointmentitem.forward
 - https://learn.microsoft.com/en-us/office/vba/api/outlook.appointmentitem.forwardasvcal
-- https://learn.microsoft.com/en-us/office/vba/api/outlook.meetingitem.sendusingaccount
+- https://learn.microsoft.com/en-us/office/vba/api/office.commandbars.executemso
+- https://support.microsoft.com/en-us/outlook/calendar/forward-a-meeting-in-outlook
 
-## Technical hypothesis
+## Path A — retained MeetingItem recovery
 
-Accepted meetings normally appear in Calendar as `AppointmentItem` objects, while native forwarding is exposed on `MeetingItem`. The spike therefore asks:
+The first implementation selects a source account by SMTP address, then searches that delivery store's default Inbox and Deleted Items for `IPM.Schedule.Meeting.Request` items.
 
-> Can the original/retained `MeetingItem` still be recovered reliably enough from the source account to call `MeetingItem.Forward()`?
+Each candidate is correlated to its appointment with `GetAssociatedAppointment(false)` and compared using `GlobalAppointmentID`.
 
-The first implementation searches only the selected account's default **Inbox** and **Deleted Items** for retained `IPM.Schedule.Meeting.Request` messages. Each request is correlated back to an appointment with `GetAssociatedAppointment(false)` and compared against the target `GlobalAppointmentID`.
+### Safety modes
 
-This is intentionally conservative. If the request has already been purged, archived elsewhere, or multiple requests match ambiguously, the spike reports that result and stops. It does not silently switch to vCalendar or create a new organizer-owned meeting.
-
-## Safety model
-
-Three modes are deliberately separated.
-
-### 1. Inspect — default / read-only
+#### Inspect — default/read-only
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --forward-spike `
@@ -43,17 +46,9 @@ Three modes are deliberately separated.
   --global-id GLOBAL_ID
 ```
 
-Behavior:
+Does not call `Forward()`, create, save, send, move, or delete anything.
 
-- opens Classic Outlook COM on the STA thread;
-- selects exactly one Outlook account by SMTP address;
-- searches that account's Inbox and Deleted Items;
-- correlates retained meeting requests through `GetAssociatedAppointment(false)`;
-- reports zero, one, or multiple native matches;
-- does **not** call `MeetingItem.Forward()`;
-- does **not** create, save, send, move, delete, or modify any Outlook item.
-
-### 2. Prepare — native Forward proof, but no send
+#### Prepare — native forward, discarded unsent
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --forward-spike `
@@ -63,18 +58,9 @@ Behavior:
   --to target@example.com
 ```
 
-Behavior:
+Requires exactly one native retained request. Calls `MeetingItem.Forward()`, resolves the target, selects the source Outlook account, then closes/discards the unsent forward.
 
-- requires exactly one retained native meeting request;
-- calls the real `MeetingItem.Forward()` method;
-- adds and resolves the requested recipient;
-- sets `SendUsingAccount` to the explicitly selected source Outlook account;
-- discards the unsent forwarded `MeetingItem` with `olDiscard`;
-- never calls `Send()`.
-
-This is the preferred first proof that Outlook can construct a native forward for the chosen accepted meeting.
-
-### 3. Send — explicit network side effect
+#### Send — explicit side effect
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --forward-spike `
@@ -85,149 +71,162 @@ This is the preferred first proof that Outlook can construct a native forward fo
   --confirm-send SEND-NATIVE-MEETING
 ```
 
-Behavior:
+Only this exact gated shape reaches `MeetingItem.Send()`.
 
-- does everything in Prepare mode;
-- requires the exact confirmation token `SEND-NATIVE-MEETING`;
-- calls `MeetingItem.Send()` only after the recipient resolves;
-- uses the selected source Outlook account through `SendUsingAccount`.
+## Real-machine result #1 — retained request unavailable
 
-The tool refuses `--send` without both `--to` and the exact confirmation token.
+Tested 2026-09-08 against a real accepted Kverneland Group meeting on the user's Classic Outlook profile.
 
-## Privacy behavior
+Source account:
 
-The spike does not read or print body content, attendees, attachments, or Teams URLs.
+`Alexander.Berg@kvernelandgroup.com`
 
-By default it reports only opaque identity, folder, time range, message class, and result state. Add `--include-details` only when you explicitly want the matched appointment subject printed for validation.
+Calendar `GlobalAppointmentID`:
 
-Errors use exception type/HRESULT context rather than raw calendar/message bodies.
+`040000008200E00074C5B7101A82E00800000000D05887327B3BDD01000000000000000010000000EB2313460E921449BF83A27C3A21C827`
 
-## Bounded search
+Observed result:
 
-The spike searches only two default folders:
+- source Outlook account selected successfully;
+- Inbox searched;
+- Deleted Items searched;
+- matching retained meeting requests: **0**;
+- no vCalendar fallback attempted;
+- no Outlook data modified.
 
-1. Inbox;
-2. Deleted Items.
+### Conclusion from result #1
 
-Only `IPM.Schedule.Meeting.Request` items are considered. Each folder is capped at 5,000 retained meeting requests to prevent a pathological unbounded diagnostic scan.
+The hypothesis that Outlook Aligner can **always** recover the original/retained `MeetingItem` after a meeting has been accepted is disproven.
 
-A zero-match result is **not automatically a bug**. It is evidence about whether the native `MeetingItem` recovery strategy is reliable enough for the product.
+This does **not** yet prove that genuine forwarding is impossible. Classic Outlook's Calendar UI can still expose Forward for an accepted `AppointmentItem`, so Phase 2 now has a second technical path.
 
-## Getting the GlobalAppointmentID
+## Path B — accepted AppointmentItem / Outlook Calendar Forward command
 
-Use the existing Phase 1 read probe:
+The next experiment is deliberately staged.
 
-```powershell
-.\OutlookAligner.OutlookHost.exe --days 90 --json --include-details > probe.json
-```
+### B1. Capability probe — no Forward execution
 
-Find a real future accepted meeting that you are **not** the organizer of. Record:
+For the exact accepted Calendar `AppointmentItem`:
 
-- the source account SMTP address;
-- the appointment's `GlobalAppointmentId`;
-- subject/start time for your own verification.
+1. reopen it by StoreID + EntryID;
+2. obtain/create its Outlook Inspector context;
+3. query Outlook's built-in Fluent command state for the native Calendar Forward control;
+4. report whether the command identifier is valid, visible, and enabled;
+5. close the Inspector without modifying the appointment.
 
-Prefer a normal Teams meeting for the main acceptance test.
+This probe must **not** call `ExecuteMso()` yet.
 
-## Manual acceptance sequence — merge gate
+The command identifier must come from Microsoft's Office Fluent UI command-identifier catalogue rather than being treated as an undocumented guess.
 
-Use a meeting that is safe to forward to one of your own other accounts.
+### B2. Prepare/discard — only if B1 proves capability
 
-### A. Inspect
+If the native Calendar Forward command is valid/enabled:
 
-- [ ] `--forward-spike --help` runs without opening Outlook.
-- [ ] Inspect mode finds the selected source account.
-- [ ] The correct Inbox/Deleted Items folders are searched.
-- [ ] The chosen meeting produces exactly one native retained `MeetingItem` match, **or** a zero-match result is recorded as evidence that this recovery strategy is insufficient.
-- [ ] Inspect mode creates/sends nothing.
-- [ ] With `--include-details`, the reported subject matches the intended appointment.
+1. subscribe to the appointment's `Forward` event;
+2. invoke only the proven built-in Forward command;
+3. capture/verify the new object supplied by Outlook's Forward event;
+4. do not add a recipient or send;
+5. close/discard the unsent forward;
+6. verify the original calendar appointment is unchanged.
 
-### B. Prepare
+### B3. Recipient/send — only after prepare succeeds
 
-Run Prepare mode only if Inspect produced exactly one match.
+Only after B2 succeeds should the spike resolve a recipient and perform one explicitly confirmed send to another account controlled by the user.
 
-- [ ] `MeetingItem.Forward()` succeeds.
-- [ ] The target recipient resolves.
-- [ ] The forward uses the selected source Outlook account.
-- [ ] No message arrives at the target account.
-- [ ] No draft or unsent meeting remains after the command exits.
-- [ ] The source calendar appointment remains unchanged.
+Verify that the received item behaves like a real forwarded meeting rather than a generic email/ICS attachment.
 
-### C. Native send
+## Positive-control test for Path A
 
-Run Send mode only after Prepare succeeds, using another account you control as the target.
-
-- [ ] The command refuses to send without the exact confirmation token.
-- [ ] The forwarded item arrives at the target as a genuine Outlook meeting invitation/update, not a generic email with `.ics` attachment.
-- [ ] The target can Accept/Tentative/Decline using normal Outlook meeting controls.
-- [ ] The forwarded meeting keeps the expected original organizer identity/meeting relationship.
-- [ ] For a Teams meeting, the Teams join capability remains usable at the target.
-- [ ] Normal reminder/meeting behavior at the target is plausible after acceptance.
-- [ ] The selected source account is the forwarding sender.
-- [ ] The source appointment is not recreated or replaced.
-- [ ] No unintended attendees or accounts receive the forward.
-
-### D. Reliability sampling
-
-Repeat Inspect/Prepare against several meetings:
-
-- [ ] recent accepted meeting request still in Inbox;
-- [ ] accepted request moved to Deleted Items;
-- [ ] older accepted meeting;
-- [ ] recurring Teams meeting;
-- [ ] meeting from each of the three configured accounts where applicable.
-
-Record how often a retained native `MeetingItem` can actually be recovered.
-
-## Decision rule
-
-Phase 2 is successful only if the native path is reliable enough to expose honestly in Outlook Aligner.
+Path A should still be tested against one recent accepted meeting whose original invitation is visibly retained in Inbox.
 
 Possible outcomes:
 
-1. **Reliable native forwarding** — continue with `MeetingItem.Forward()` as the product's Forward action.
-2. **Conditionally available** — expose Forward only when a recoverable native `MeetingItem` exists; otherwise offer Copy Full / Copy Busy later.
-3. **Not reliable enough** — do not ship a Forward action. Do not substitute `ForwardAsVcal()` under the same label.
+- **1 native match:** Path A is conditionally useful.
+- **0 matches despite the visible request:** the current request-correlation implementation needs repair before judging Path A.
+
+Do not run `--prepare` or `--send` for the positive control until Inspect returns exactly one match.
+
+## Privacy
+
+The spike does not read/print meeting body, attendees, attachments, Teams URLs, or location by default.
+
+Subject remains explicit `--include-details` diagnostic opt-in.
+
+Errors use operation/HRESULT/type context rather than raw message contents.
+
+## Current decision model
+
+Phase 2 may end in one of four truthful outcomes:
+
+1. **Reliable native forwarding** — safe native route works broadly; expose Forward normally.
+2. **Conditional native forwarding** — expose Forward only when per-event capability proves it is available.
+3. **Outlook-UI-command-only forwarding** — retained request is unreliable but a supported Calendar command route is stable enough to automate; expose it with explicit capability checks.
+4. **Not reliable enough** — omit Forward from the product and use Copy Full / Copy Busy instead.
+
+At no point does `ForwardAsVcal()` become a silent fallback for the Forward action.
+
+## Manual merge gate
+
+Before PR #5 may merge:
+
+### Retained-request path
+
+- [x] zero-match real-world result recorded for an accepted meeting;
+- [ ] positive control with invitation visibly retained in Inbox;
+- [ ] if exactly one match exists, Prepare succeeds and discards unsent;
+- [ ] if Prepare succeeds, one explicitly confirmed native send is verified.
+
+### Calendar-command path
+
+- [ ] exact Microsoft Fluent command identifier confirmed;
+- [ ] capability probe reports valid/visible/enabled state without executing Forward;
+- [ ] prepare/discard invocation tested only after capability probe succeeds;
+- [ ] appointment Forward event produces the expected native object;
+- [ ] no draft remains after discard;
+- [ ] source appointment remains unchanged;
+- [ ] one explicitly confirmed send is tested only after prepare passes;
+- [ ] target receives genuine meeting behavior and Teams join remains usable where applicable.
+
+### General
+
+- [ ] repeat against several meeting types/accounts;
+- [ ] organizer-disabled forwarding is handled as unavailable, not an error-prone workaround;
+- [ ] no unintended recipients or calendar writes occur;
+- [ ] hosted CI is green on final PR head.
 
 ## Hosted CI
 
-Hosted runners cannot prove live Outlook forwarding because they do not have the user's Outlook profile.
+Hosted runners cannot prove live Outlook/Exchange forwarding but must continue to prove:
 
-CI must still prove:
-
-- [ ] formatter/analyzer gate passes;
-- [ ] Release solution build passes;
-- [ ] xUnit/MTP tests and coverage pass;
-- [ ] benchmark project compiles;
-- [ ] NuGet/npm audits pass;
-- [ ] self-contained `win-x64` publish succeeds;
-- [ ] published executable passes `--help`;
-- [ ] published executable passes `--interop-check`;
-- [ ] published executable passes `--forward-spike --help` without opening Outlook;
-- [ ] Phase 2 artifact uploads successfully.
-
-Hosted tests cover command gating, read-only default mode, prepare/send separation, confirmation-token enforcement, and malformed forwarding arguments.
+- formatter/analyzers;
+- Release solution build;
+- xUnit/MTP tests + coverage;
+- benchmark compile;
+- NuGet/npm audits;
+- self-contained win-x64 publish;
+- published EXE `--help`;
+- published EXE `--interop-check`;
+- published EXE `--forward-spike --help` without opening Outlook;
+- Phase 2 artifact upload.
 
 ## Exit codes
 
-- `0` — requested inspect/prepare/send operation completed successfully.
-- `2` — invalid command-line arguments.
+- `0` — requested operation completed successfully.
+- `2` — invalid command line.
 - `3` — Outlook COM failure.
 - `4` — unexpected/dependency failure.
-- `5` — source account/native request selection or correlation could not be resolved safely.
-- `6` — forwarding recipient could not be resolved; unsent forward discarded.
+- `5` — source/native selection or correlation could not be resolved safely.
+- `6` — recipient could not be resolved; unsent forward discarded.
 
 ## Explicit non-goals
 
 Phase 2 does not:
 
 - create a replacement organizer-owned meeting;
-- use `AppointmentItem.ForwardAsVcal()` as fallback;
-- copy meeting bodies or Teams URLs manually;
-- correlate meetings across all three calendars beyond `GlobalAppointmentID` selection;
-- persist forwarding state;
-- implement production UI;
+- use `AppointmentItem.ForwardAsVcal()` as native Forward;
+- copy Teams/body content manually to fake forwarding;
+- implement the production GUI;
 - implement Copy Full / Copy Busy;
 - merge automatically.
 
-Do not merge Phase 2 until hosted CI is green and the user has completed enough real-Outlook tests to decide which native-forwarding outcome is truthful.
+The production GUI is nevertheless a required v1 surface and is specified separately in [`docs/ui.md`](ui.md).
