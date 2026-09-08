@@ -204,12 +204,58 @@
                         </ListView>
                     </Grid>
 
-                    <StackPanel x:Name="PlaceholderPanel" Visibility="Collapsed" MaxWidth="720" HorizontalAlignment="Left" Spacing="10">
-                        <TextBlock x:Name="PlaceholderTitle" FontSize="28" FontWeight="SemiBold" />
-                        <TextBlock
-                            Text="This destination is part of the production shell and will be filled in as the UI-assisted development phase advances."
-                            TextWrapping="Wrap" />
-                    </StackPanel>
+                    <Grid x:Name="SettingsPanel" Visibility="Collapsed" RowSpacing="14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock FontSize="28" FontWeight="SemiBold" Text="Settings" />
+                            <TextBlock
+                                MaxWidth="820"
+                                Opacity="0.7"
+                                Text="Configure the read horizon and inspect which Classic Outlook accounts are available to Outlook Aligner. Persistence will be added with the local settings store; this slice keeps the value for the running app."
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="Future scan horizon" />
+                            <NumberBox
+                                Width="110"
+                                Maximum="3650"
+                                Minimum="1"
+                                SpinButtonPlacementMode="Compact"
+                                Value="{Binding ScanDays, Mode=TwoWay}" />
+                            <TextBlock VerticalAlignment="Center" Text="days" />
+                            <Button Command="{Binding RefreshCommand}" Content="Apply and refresh" />
+                            <ProgressRing Width="24" Height="24" IsActive="{Binding IsBusy}" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2" Spacing="8">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Classic Outlook accounts" />
+                            <ListView ItemsSource="{Binding Accounts}" SelectionMode="None">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Padding="8,10" RowSpacing="4">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12">
+                                                <TextBlock Opacity="0.75" Text="{Binding AccountType}" />
+                                                <TextBlock Opacity="0.75" Text="{Binding CalendarStatus}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="2" Opacity="0.75" Text="{Binding ErrorSummary}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Grid>
 
                     <Grid x:Name="DiagnosticsPanel" Visibility="Collapsed" RowSpacing="14">
                         <Grid.RowDefinitions>
