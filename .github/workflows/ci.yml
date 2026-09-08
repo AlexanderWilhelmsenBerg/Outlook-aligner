@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   dotnet:
-    name: .NET build, test and Phase 1 probe
+    name: .NET build, test and OutlookHost artifact
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -30,7 +30,7 @@ jobs:
         run: dotnet build benchmarks/OutlookAligner.Benchmarks/OutlookAligner.Benchmarks.csproj -c Release --no-restore
       - name: Audit NuGet dependencies
         run: dotnet list OutlookAligner.sln package --vulnerable --include-transitive
-      - name: Publish Phase 1 Outlook probe
+      - name: Publish OutlookHost
         run: >-
           dotnet publish src/OutlookAligner.OutlookHost/OutlookAligner.OutlookHost.csproj
           -c Release
@@ -40,16 +40,17 @@ jobs:
           -p:PublishTrimmed=false
           -p:DebugType=None
           -p:DebugSymbols=false
-          --output artifacts/phase1-probe
+          --output artifacts/outlook-host
       - name: Smoke test published executable
         run: |
-          .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --help
-          .\artifacts\phase1-probe\OutlookAligner.OutlookHost.exe --interop-check
-      - name: Upload Phase 1 Outlook probe
+          .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --help
+          .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --interop-check
+          .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe --forward-spike --help
+      - name: Upload Phase 2 OutlookHost
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: OutlookAligner-Phase1-Probe-win-x64
-          path: artifacts/phase1-probe/OutlookAligner.OutlookHost.exe
+          name: OutlookAligner-Phase2-Forwarding-Spike-win-x64
+          path: artifacts/outlook-host/OutlookAligner.OutlookHost.exe
           if-no-files-found: error
           retention-days: 14
 

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using OutlookAligner.OutlookHost.Com;
+using OutlookAligner.OutlookHost.Forwarding;
 using OutlookAligner.OutlookHost.Probe;
 
 namespace OutlookAligner.OutlookHost;
@@ -27,6 +28,11 @@ internal static class Program
                 Console.Error.WriteLine($"Outlook interop check failed: {exception.GetType().Name}.");
                 return 4;
             }
+        }
+
+        if (ForwardSpikeOptions.IsRequested(args))
+        {
+            return RunForwardingSpike(args);
         }
 
         if (!ProbeOptions.TryParse(args, out var options, out var error))
@@ -64,6 +70,54 @@ internal static class Program
         catch (Exception exception)
         {
             Console.Error.WriteLine($"Outlook probe failed: {exception.GetType().Name}.");
+            return 4;
+        }
+    }
+
+    private static int RunForwardingSpike(string[] args)
+    {
+        if (!ForwardSpikeOptions.TryParse(args, out var options, out var error))
+        {
+            Console.Error.WriteLine(error);
+            Console.Error.WriteLine();
+            ForwardSpikeOutput.WriteUsage();
+            return 2;
+        }
+
+        if (options.ShowHelp)
+        {
+            ForwardSpikeOutput.WriteUsage();
+            return 0;
+        }
+
+        try
+        {
+            var result = options.Action switch
+            {
+                ForwardSpikeAction.PrepareCalendarCommand => CalendarForwardCommandExperiment.Run(options),
+                ForwardSpikeAction.PrepareCalendarRecipient or ForwardSpikeAction.SendCalendarCommand
+                    => CalendarForwardRecipientExperiment.Run(options),
+                _ => NativeMeetingForwardSpike.Run(options),
+            };
+
+            ForwardSpikeOutput.Write(result, options.IncludeDetails);
+            return result.ExitCode;
+        }
+        catch (FileNotFoundException exception)
+        {
+            WriteMissingDependency(exception);
+            return 4;
+        }
+        catch (COMException exception)
+        {
+            Console.Error.WriteLine(
+                $"Outlook native-forwarding spike failed (HRESULT 0x{exception.ErrorCode:X8}). "
+                + "No vCalendar fallback was attempted.");
+            return 3;
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Outlook native-forwarding spike failed: {exception.GetType().Name}.");
             return 4;
         }
     }
