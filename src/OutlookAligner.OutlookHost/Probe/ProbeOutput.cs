@@ -90,14 +90,16 @@ internal static class ProbeOutput
     {
         Console.WriteLine("Usage: OutlookAligner.OutlookHost.exe [--days N] [--json] [--include-details]");
         Console.WriteLine("       OutlookAligner.OutlookHost.exe --interop-check");
+        Console.WriteLine("       OutlookAligner.OutlookHost.exe --forward-spike --help");
         Console.WriteLine();
         Console.WriteLine($"  --days N           Scan 1-{ProbeOptions.MaximumDays} days from today (default {ProbeOptions.DefaultDays}).");
         Console.WriteLine("  --json             Emit the probe result as JSON.");
         Console.WriteLine("  --include-details  Include event subject and location in output. Off by default.");
         Console.WriteLine("  --interop-check    Validate packaged Outlook interop metadata without opening Outlook.");
+        Console.WriteLine("  --forward-spike    Enter the Phase 2 native meeting-forwarding spike. Use with --help for safe usage.");
         Console.WriteLine("  --help, -h         Show this help text without opening Outlook.");
         Console.WriteLine();
-        Console.WriteLine("Phase 1 is read-only: the probe does not save, send, forward, move, or delete Outlook items.");
+        Console.WriteLine("The default Phase 1 probe is read-only. Phase 2 forwarding requires explicit --forward-spike options.");
     }
 
     private static OutlookProbeResult RedactDetails(OutlookProbeResult result)

@@ -1,8 +1,8 @@
 # Outlook Aligner — Implementation Plan
 
-Status: **Phase 0 complete ✅. Phase 1 is in progress 🚧 on PR #4.**
+Status: **Phase 0 complete ✅. Phase 1 complete ✅ and merged. Phase 2 native-forwarding spike in progress 🚧.**
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-08
 
 ## 1. Goal
 
@@ -18,16 +18,17 @@ Microsoft Graph is explicitly out of scope. The design must not require Azure ap
 - Classic Outlook for Windows is required.
 - The three target accounts are configured in the same Outlook profile.
 - Accounts/calendars are discovered automatically through Outlook COM.
-- New Outlook is out of scope because it does not expose the Classic Outlook Object Model automation surface required by this project.
+- New Outlook is out of scope because it does not expose the required Classic Outlook Object Model automation surface.
 - Outlook Aligner stores no Outlook passwords or access tokens.
 
 ### Calendar scan
 
 - Scan starts at today.
-- Future horizon is configurable; default is 90 days.
+- Future horizon is configurable; default 90 days.
 - Recurrences must be expanded only inside the bounded horizon.
 - Refresh is user-driven in v1.
 - One failed calendar/item must not abort the entire scan.
+- The overlap window is half-open: `eventEnd > windowStart && eventStart < windowEnd`.
 
 ### Logical event states
 
@@ -44,13 +45,19 @@ Microsoft Graph is explicitly out of scope. The design must not require Azure ap
 
 #### Forward meeting
 
-A real `Forward meeting` action may be exposed only if the Phase 2 technical spike proves that Classic Outlook COM can reliably reproduce Outlook's genuine forwarding behavior for accepted meetings. `AppointmentItem.ForwardAsVcal()` is not equivalent and must never be silently presented as true forwarding.
+Expose a real `Forward meeting` action only if Phase 2 proves genuine Classic Outlook forwarding for accepted meetings.
 
-#### Copy full
+- Preferred mechanism: recover a native `MeetingItem` and call `MeetingItem.Forward()`.
+- `AppointmentItem.ForwardAsVcal()` is not equivalent and must never be silently presented as native forwarding.
+- If native recovery is only conditionally reliable, the product must expose Forward only when that capability is actually available.
 
-Create an Outlook Aligner-managed calendar copy containing the available full details required by the product: subject, time, all-day state, location, body, online-meeting link where available, reminder settings, busy state, sensitivity, and supported recurrence data.
+#### Copy Full
 
-#### Copy busy
+Create an Outlook Aligner-managed calendar copy containing the supported full details required by the product: subject, time, all-day state, location, body, online-meeting link where available, reminder settings, busy state, sensitivity, and supported recurrence data.
+
+A copied item is a managed local copy; it must not be described as making the target account an attendee of the organizer's original meeting.
+
+#### Copy Busy
 
 Create a privacy-preserving managed placeholder containing time/all-day/busy state and optionally a generic `Busy` subject. By default it must not copy body, attendees, Teams link, or location.
 
@@ -65,9 +72,11 @@ Authority reason is recorded as:
 - `Inferred`
 - `Unknown`
 
-`Move selected` updates only non-authoritative managed/local copies to the authoritative Start/End. The authoritative original is untouched.
+`Move selected` updates only non-authoritative managed/local copies to authoritative Start/End. The authoritative original is untouched.
 
 `Move all` builds a preview first and excludes conflicts, unknown authority, ignored events, unsupported recurrence mutations, and failed safety checks.
+
+`LastModificationTime` must never become an implicit latest-wins authority rule.
 
 ### Deletion
 
@@ -77,11 +86,11 @@ Deletion synchronization is explicitly excluded from v1. Missing data is never i
 
 ### EntryID is a locator, not identity
 
-Store `StoreID + EntryID` only as a current Outlook locator cache. EntryID may change after moves or other Outlook operations.
+Store `StoreID + EntryID` only as the current Outlook locator cache. EntryID may change after moves or other Outlook operations.
 
 ### Primary native correlation
 
-Use Outlook `GlobalAppointmentID` as the primary native meeting-correlation candidate.
+Use Outlook `GlobalAppointmentID` as the primary native meeting-correlation candidate. Outlook documents it as the Global Object ID used to correlate meeting updates/responses and retained across copies.
 
 ### Outlook Aligner-managed identity
 
@@ -105,7 +114,7 @@ Series masters, normal occurrences, modified exceptions, and deleted occurrences
 
 - C# 14 / .NET 10 LTS.
 - WinUI 3 / Windows App SDK for the production desktop UI.
-- WebView2 + FullCalendar Vanilla for rich calendar visualization.
+- WebView2 + FullCalendar Vanilla for calendar visualization.
 - TypeScript + Vite for calendar assets.
 - SQLite via Microsoft.Data.Sqlite + Dapper.
 - CommunityToolkit.Mvvm.
@@ -139,11 +148,11 @@ The Outlook host is not a Windows service.
 - COM objects never cross IPC or enter Core/UI DTOs.
 - Convert Outlook objects immediately to plain DTOs.
 - Keep Outlook automation on an STA thread.
-- Explicitly release short-lived COM references, especially recurrence objects.
-- Avoid COM `foreach` patterns where they hide enumerator RCWs.
+- Explicitly release locally owned COM references.
+- Avoid COM `foreach` patterns where hidden enumerator RCWs matter.
 - Never use `EntryID` as cross-account logical identity.
-- Do not call `Outlook.Application.Quit()` merely because the probe started/attached to Outlook.
-- Normal diagnostics contain HRESULT/operation context, not meeting subject/body/attendees/Teams URLs.
+- Do not call `Outlook.Application.Quit()` merely because OutlookHost activated Outlook.
+- Normal diagnostics contain HRESULT/operation context, not meeting body/attendees/Teams URLs.
 
 ## 5. Persistence plan
 
@@ -171,76 +180,28 @@ Primary views:
 
 Calendar view will show three synchronized account calendars. Alignment view will provide discrepancy filters, authority selection, and explicit single/bulk actions. Every bulk write operation requires a preview.
 
-## 7. Verified stable implementation baseline
+## 7. Verified implementation baseline
 
-Verification date: **2026-09-07**. `✅` means rechecked against the latest non-preview/non-RC stable release. No Phase 0 dependency upgrade was required.
+The detailed latest-stable version matrix is maintained in [`docs/phase-0.md`](docs/phase-0.md). Current baseline remains:
 
-### Platform/toolchain
+- .NET SDK 10.0.400 / runtime 10.0.11 / C# 14;
+- Windows App SDK 2.4.0;
+- WebView2 1.0.4191.47;
+- Microsoft.Office.Interop.Outlook 15.0.4797.1004;
+- Microsoft.Data.Sqlite 10.0.11 / Dapper 2.1.79;
+- CommunityToolkit.Mvvm 8.4.2;
+- Serilog stack as recorded in Phase 0;
+- xUnit v3 4.0.0 / CodeCoverage 18.11.0 / NSubstitute 6.2.0;
+- BenchmarkDotNet 0.15.8;
+- Node.js 24.20.0 LTS / npm 11.19.0;
+- TypeScript 7.0.2 / Vite 8.2.2 / FullCalendar 7.1.0;
+- actions/checkout 7.0.1 / setup-dotnet 6.0.0 / setup-node 7.0.0 / upload-artifact 7.0.1.
 
-| Component | Version | Latest stable verified |
-| --- | ---: | :---: |
-| .NET SDK | 10.0.400 | ✅ |
-| .NET Runtime/Desktop Runtime | 10.0.11 | ✅ |
-| C# | 14.0 | ✅ |
-| Visual Studio 2026 (recommended IDE) | 18.9.2 | ✅ |
-| Node.js LTS | 24.20.0 | ✅ |
-| npm with Node 24.20.0 | 11.19.0 | ✅ |
+### Phase 1 packaging lesson
 
-Node 24 is intentionally the latest **LTS** line used by the repository; Node 26 is the newer Current line.
+Real-machine testing proved that a successful single-file build plus `--help` smoke test was not enough to validate Office interop packaging. Outlook PIA metadata is now embedded from the resolved reference, and CI runs `--interop-check` against the actual published EXE before upload.
 
-### NuGet application packages
-
-| Package | Version | Verified |
-| --- | ---: | :---: |
-| Microsoft.WindowsAppSDK | 2.4.0 | ✅ |
-| CommunityToolkit.Mvvm | 8.4.2 | ✅ |
-| Microsoft.Web.WebView2 | 1.0.4191.47 | ✅ |
-| Microsoft.Office.Interop.Outlook | 15.0.4797.1004 | ✅ |
-| Microsoft.Data.Sqlite | 10.0.11 | ✅ |
-| Dapper | 2.1.79 | ✅ |
-| Microsoft.Extensions.Hosting | 10.0.11 | ✅ |
-| Microsoft.Extensions.Configuration.Json | 10.0.11 | ✅ |
-| Microsoft.Extensions.Logging | 10.0.11 | ✅ |
-| Serilog | 4.4.0 | ✅ |
-| Serilog.Extensions.Hosting | 10.0.0 | ✅ |
-| Serilog.Settings.Configuration | 10.0.1 | ✅ |
-| Serilog.Sinks.File | 7.0.0 | ✅ |
-
-The Outlook interop package has an old-looking version because the PIA package version does not track current Outlook product builds; `15.0.4797.1004` remains the current stable package.
-
-### Test/quality packages
-
-| Package | Version | Verified |
-| --- | ---: | :---: |
-| xunit.v3 | 4.0.0 | ✅ |
-| Microsoft.Testing.Extensions.CodeCoverage | 18.11.0 | ✅ |
-| NSubstitute | 6.2.0 | ✅ |
-| BenchmarkDotNet | 0.15.8 | ✅ |
-
-The repository does **not** use the earlier planning-only `Microsoft.NET.Test.Sdk` + `coverlet.collector` combination.
-
-### Frontend
-
-| Package/tool | Version | Verified |
-| --- | ---: | :---: |
-| fullcalendar | 7.1.0 | ✅ |
-| temporal-polyfill | 1.0.4 | ✅ |
-| TypeScript | 7.0.2 | ✅ |
-| Vite | 8.2.2 | ✅ |
-| ESLint | 10.10.0 | ✅ |
-| Prettier | 3.9.6 | ✅ |
-
-The current stable `typescript-eslint` line does not support TypeScript 7, so Phase 0 intentionally does not force an unsupported peer dependency. Strict `tsc --noEmit` is the TypeScript static-analysis gate until compatible stable tooling is available.
-
-### GitHub Actions
-
-| Action | Version | Verified |
-| --- | ---: | :---: |
-| actions/checkout | 7.0.1 | ✅ |
-| actions/setup-dotnet | 6.0.0 | ✅ |
-| actions/setup-node | 7.0.0 | ✅ |
-
-Phase 1 adds `actions/upload-artifact@7.0.1`, also verified latest stable before use.
+That check is a permanent regression gate.
 
 ## 8. Engineering quality and privacy
 
@@ -257,27 +218,31 @@ Phase 1 adds `actions/upload-artifact@7.0.1`, also verified latest stable before
 ### Frontend gates
 
 - TypeScript strict mode;
-- ESLint for currently supported sources;
+- ESLint for supported sources;
 - Prettier;
 - Vite production build.
 
-Direct npm versions are exact, but Phase 0 does not fabricate a lockfile. CI currently uses `npm install --ignore-scripts`. The first PR that materially changes `web/calendar` must generate a real `package-lock.json` and move CI/local verification to `npm ci`.
+Direct npm versions are exact. The first PR that materially changes `web/calendar` must generate a real `package-lock.json` under Node 24 and switch CI/local verification to `npm ci`.
 
-### Logging
+### Privacy
 
-Normal logs may include counts, sync IDs, operation type, HRESULT/error category, and timings. They must not include subject, body, attendees, Teams links, or meeting location by default.
+Normal logs/output may include counts, sync IDs/global IDs, operation type, HRESULT/error category, and timings. They must not include subject, body, attendees, Teams links, or meeting location by default.
+
+Diagnostic details are explicit opt-in.
 
 ## 9. Testing strategy
 
 ### Hosted CI
 
-Pure Core/Persistence/contract tests run without Outlook. Windows CI also builds the OutlookHost but cannot perform live Outlook integration because hosted runners do not have the user's Outlook profile.
+Pure Core/Persistence/contract tests run without Outlook. Windows CI builds/publishes OutlookHost but cannot perform live Outlook integration because hosted runners do not have the user's Outlook profile.
 
 ### Manual Outlook integration
 
-A downloadable diagnostic executable is produced from successful Phase 1 CI onward. Manual scenarios include account discovery, bounded recurrence scans, Teams meetings, all-day events, DST boundaries, Outlook cold start/restart, unavailable stores, and repeated scans. Passing the real three-account Classic Outlook suite is a Phase 1 merge gate.
+A downloadable diagnostic executable is produced for Outlook-specific phases. Manual tests are merge gates whenever behavior depends on real Classic Outlook, Exchange/Teams state, or Outlook profile contents.
 
-A dedicated self-hosted Outlook integration runner may be added later but is not required initially.
+### Side-effect rule
+
+Any test path that sends, saves, moves, creates, forwards, or deletes Outlook data must require explicit CLI/UI intent. Read-only inspection is the default.
 
 ## 10. CI/CD
 
@@ -296,9 +261,10 @@ Every pull request targeting `main` must pass:
 11. ESLint;
 12. Prettier;
 13. Vite production build;
-14. npm production vulnerability audit.
-
-From Phase 1, successful CI additionally publishes a self-contained Windows x64 Outlook probe executable and uploads it as a GitHub Actions artifact for manual testing.
+14. npm production vulnerability audit;
+15. self-contained Windows OutlookHost publish for Outlook-specific phases;
+16. published-EXE `--help` and `--interop-check` smoke tests;
+17. phase-specific no-Outlook CLI smoke tests before artifact upload.
 
 Dependabot checks NuGet, npm, and GitHub Actions weekly. Dependency PRs are not auto-merged.
 
@@ -308,76 +274,50 @@ Dependabot checks NuGet, npm, and GitHub Actions weekly. Dependency PRs are not 
 
 Completed directly on `main` as the one-time bootstrap exception.
 
+See [`docs/phase-0.md`](docs/phase-0.md) for implementation and version-verification evidence.
+
+### Phase 1 — Outlook COM discovery/read probe — **Complete ✅ / merged PR #4**
+
 Delivered:
 
-- solution/project structure;
-- .NET 10.0.400 / C# 14 baseline;
-- Central Package Management;
-- formatting/analyzer policy;
-- xUnit v3 + Microsoft Testing Platform + coverage;
-- BenchmarkDotNet infrastructure;
-- compile-only WinUI and OutlookHost boundaries;
-- TypeScript/Vite/FullCalendar shell;
-- local verification script;
-- GitHub Actions CI;
-- Dependabot;
-- latest-stable version verification.
+- STA Classic Outlook activation/profile discovery;
+- account/store/default Calendar enumeration;
+- configurable bounded calendar scan;
+- recurrence-safe `Sort -> IncludeRecurrences -> Restrict -> GetFirst/GetNext` sequence;
+- half-open overlap filter;
+- privacy-safe console/JSON DTO output;
+- deterministic COM release boundary;
+- self-contained Windows artifact;
+- embedded Outlook interop metadata + published-EXE `--interop-check` regression gate.
 
-Acceptance evidence:
+Real-machine testing found and fixed the interop packaging issue. The user confirmed a repaired live 14-day probe worked and merged PR #4 on 2026-09-08.
 
-- [x] clean hosted checkout builds;
-- [x] formatter/analyzer gates pass;
-- [x] tests and coverage pass;
-- [x] benchmark project compiles;
-- [x] frontend typecheck/lint/format/build passes;
-- [x] NuGet/npm audits pass;
-- [x] GitHub Actions run `34101604197` is green;
-- [x] direct dependencies and Actions reverified latest stable;
-- [x] documentation records actual implementation versions.
+See [`docs/phase-1.md`](docs/phase-1.md).
 
-**Branch policy:** Phase 1 and every later implementation phase is PR-only. Do not merge without explicit user instruction.
+### Phase 2 — Native meeting-forwarding technical spike — **In progress 🚧 / PR required**
 
-### Phase 1 — Outlook COM discovery/read probe — **In progress 🚧 / PR #4**
+Goal: determine whether genuine Outlook meeting forwarding is reliable enough to ship.
 
-Implement only read-only behavior:
+Implementation rules:
 
-- activate/attach to `Outlook.Application` automation on an STA thread;
-- access the current MAPI namespace/profile;
-- enumerate accounts and stores;
-- locate each account's default Calendar;
-- read a configurable bounded date range (default 90 days);
-- use half-open overlap semantics (`eventEnd > windowStart` and `eventStart < windowEnd`);
-- expand recurrences only inside the bound;
-- extract plain account/store/event DTOs;
-- expose privacy-safe console/JSON diagnostics with defensive output redaction;
-- release COM references deterministically;
-- never save, send, forward, delete, or modify Outlook data.
+- select a source account explicitly by SMTP;
+- select a real calendar meeting by `GlobalAppointmentID`;
+- search the source account's retained `IPM.Schedule.Meeting.Request` items in Inbox and Deleted Items;
+- call `GetAssociatedAppointment(false)` to correlate request -> appointment without adding calendar data;
+- default Inspect mode is read-only;
+- Prepare mode may invoke `MeetingItem.Forward()`, resolve one explicit recipient, set `SendUsingAccount`, then discard unsent;
+- Send mode requires an exact confirmation token before calling `MeetingItem.Send()`;
+- refuse zero/multiple/ambiguous native request matches;
+- never fall back to `ForwardAsVcal()` under the Forward label;
+- keep body/attendees/Teams URL out of diagnostic output.
 
-Phase 1 build artifact:
+Decision outcomes:
 
-- successful CI publishes `OutlookAligner.OutlookHost` for `win-x64` as a self-contained single-file executable;
-- artifact name: `OutlookAligner-Phase1-Probe-win-x64`;
-- latest stable `actions/upload-artifact@v7.0.1` is used;
-- the artifact is intended for manual testing on a Windows machine with Classic Outlook and the three-account profile configured.
+1. reliable native forwarding -> ship Forward later;
+2. conditionally recoverable -> show Forward only when capability exists;
+3. unreliable -> omit Forward and rely on Copy Full / Copy Busy later.
 
-Acceptance:
-
-- [ ] PR CI passes;
-- [ ] downloadable executable artifact is produced;
-- [ ] executable discovers the expected three accounts;
-- [ ] default Calendar is located for each usable account;
-- [ ] bounded calendar items can be read repeatedly;
-- [ ] recurring events remain bounded to the requested horizon;
-- [ ] half-open lower/upper window boundaries behave correctly;
-- [ ] default console and JSON output do not disclose event subject/body/location;
-- [ ] Outlook already-running and cold-start paths both work;
-- [ ] no Outlook data is written;
-- [ ] repeated manual scans do not destabilize Outlook;
-- [ ] the full manual merge-gate checklist in `docs/phase-1.md` passes on the real Classic Outlook profile.
-
-### Phase 2 — Forwarding technical spike
-
-Test true native forwarding with a real received/accepted Teams meeting. Prove whether a corresponding `MeetingItem` can be recovered and `MeetingItem.Forward()` can reproduce native Outlook forwarding. If not reliable, do not expose a misleading `Forward meeting` action.
+See [`docs/phase-2.md`](docs/phase-2.md) for the manual Teams/Outlook test matrix.
 
 ### Phase 3 — Identity model prototype
 
@@ -387,19 +327,19 @@ Implement GlobalAppointmentID correlation, StoreID+EntryID locators, Aligner met
 
 Implement account cards, horizon controls, synchronized Calendar view, Alignment view, filters, comparison pane, status calculation, and local authority selection. Still no calendar writes.
 
-### Phase 5 — Copy full
+### Phase 5 — Copy Full
 
 Create safe Aligner-managed full copies with sync metadata and restart-safe correlation.
 
-### Phase 6 — Copy busy
+### Phase 6 — Copy Busy
 
 Create privacy-preserving managed busy placeholders without detail leakage.
 
-### Phase 7 — Move selected
+### Phase 7 — Move Selected
 
-Apply authority-driven Start/End updates only to selected non-authoritative members with independent failure handling and operation history.
+Apply authority-driven Start/End updates only to selected non-authoritative managed copies with independent failure handling and operation history.
 
-### Phase 8 — Move all
+### Phase 8 — Move All
 
 Build an immutable action plan, exclude unsafe/conflicted items, show preview, require confirmation, execute independently, rescan, and summarize.
 
@@ -423,8 +363,8 @@ V1 is complete when:
 6. Missing/Moved/Different/Conflict states are clear;
 7. authority can be chosen/remembered;
 8. Copy Full and Copy Busy work safely;
-9. Forward is offered only if Phase 2 proves genuine native forwarding;
-10. Move selected and Move All obey authority/safety rules;
+9. Forward is offered only if Phase 2 proves genuine native forwarding for that situation;
+10. Move Selected and Move All obey authority/safety rules;
 11. originals are not automatically deleted;
 12. state survives restart;
 13. one item failure does not abort the batch;
@@ -433,16 +373,19 @@ V1 is complete when:
 
 ## 13. Known risks
 
-- True COM meeting forwarding for accepted meetings.
+- Native MeetingItem recovery after accepted requests are deleted/archived.
+- True forwarding behavior under Exchange/Teams organizer policies.
 - Outlook recurrence and moved exceptions.
 - COM lifetime/rejected-call behavior.
-- Exchange/Teams tenant or organizer policies.
 - Cross-calendar privacy when making full copies.
+- Timezone/DST semantics when moving/correlating appointments.
 
-## 14. Reference sources
+## 14. Branch and merge policy
 
-Primary sources are Microsoft Learn, .NET release/download pages, NuGet package pages, npm package pages, Node release information, and the official GitHub Action repositories. Stable versions were rechecked on 2026-09-07 before closing Phase 0.
+Phase 0 was the only direct-to-main exception.
+
+Phase 1 and all later implementation work is PR-only. Never merge a PR unless the user explicitly instructs it after the relevant hosted/manual gates have been reviewed.
 
 ## 15. Next action
 
-Finish **Phase 1 on PR #4**: get hosted CI fully green, produce the downloadable read-only probe executable, run the documented merge-gate suite against the user's real three-account Classic Outlook profile, and merge only when the user explicitly requests it. Phase 2 follows only after Phase 1 is tested and merged.
+Complete Phase 2 on a feature branch/PR, publish the forwarding-spike executable, and use a real accepted Teams meeting plus another account controlled by the user to decide whether native Outlook forwarding is reliable, conditional, or unsuitable for the product.

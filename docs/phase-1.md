@@ -1,10 +1,27 @@
 # Phase 1 — Outlook COM Discovery / Read Probe
 
-Status: **In progress 🚧 — pull request only; hosted CI complete ✅; manual Outlook merge gate pending**
+Status: **Complete ✅ — merged as PR #4 on 2026-09-08**
 
-Started: 2026-09-07
+Started: 2026-09-07  
+Merged: 2026-09-08  
+Merge commit: `3175f1964b3980c63419b8bc03fa38eb3cd9f99f`
 
-Hosted CI verified: 2026-09-07, run `34112886367`, commit `135d192a52201ba789277425c8e4395e1b343874`
+## Completion evidence
+
+Phase 1 was validated in two layers:
+
+1. Hosted CI passed the build/test/publish gates.
+2. The first real-machine run exposed a missing Office interop packaging dependency that hosted `--help` testing could not detect. The PR was repaired to embed the resolved Outlook interop metadata and add a published-EXE `--interop-check`. The user then confirmed the real 14-day Classic Outlook probe worked and explicitly merged PR #4.
+
+Final pre-merge CI evidence:
+
+- run: `34121178052`;
+- head: `e0acfc95bba4af2b766f92d063f43eae97440090`;
+- artifact: `OutlookAligner-Phase1-Probe-win-x64`;
+- artifact ID: `10018308723`;
+- SHA-256: `1b955e2d25fef3451a571a4a8f3ba181363f6380ca5303ca2e703d4811a13bd3`.
+
+The user did not separately report every scenario in the longer manual checklist below, so those boxes remain historical test guidance rather than fabricated completion evidence.
 
 ## Purpose
 
@@ -35,34 +52,22 @@ Event subjects/locations are shown only when `--include-details` is explicitly s
 
 Unhandled non-COM failures report the exception type only; raw exception messages are not printed by default because future exception text could contain sensitive data.
 
-## Build artifact
+## Packaging lesson from real-machine testing
 
-A **successful** Phase 1 pull-request CI run publishes a self-contained Windows x64 single-file executable:
+The original self-contained single-file artifact built and passed `--help` in hosted CI but failed on the user's machine at the first live Outlook path with `FileNotFoundException`.
 
-`OutlookAligner-Phase1-Probe-win-x64`
+Root cause: the Outlook PIA was consumed through `PackageReference`, so interop metadata was not embedded automatically. The repaired build marks the resolved `Microsoft.Office.Interop.Outlook` reference with `EmbedInteropTypes=true` after `ResolveReferences`.
 
-The artifact contains:
+The final CI smoke test runs both:
 
-`OutlookAligner.OutlookHost.exe`
+```powershell
+.\OutlookAligner.OutlookHost.exe --help
+.\OutlookAligner.OutlookHost.exe --interop-check
+```
 
-Failed upstream CI gates correctly prevent artifact publication.
+`--interop-check` resolves Outlook interop metadata without opening Outlook, covering the packaging failure that the original help-only smoke test missed.
 
-The workflow uses `actions/upload-artifact@v7.0.1`, verified as the latest stable upload-artifact action on 2026-09-07.
-
-Verified artifact from CI run `34112886367`:
-
-- artifact ID: `10015120125`;
-- size: `39,802,698` bytes;
-- SHA-256: `c6d0c8ab47d092c025839f5f012ea0870b3600062818b44cd53c3e53a70ada76`;
-- retention expiry: 2026-09-21.
-
-## Download and run
-
-1. Open the Phase 1 pull request on GitHub.
-2. Open the successful `CI` workflow run.
-3. Download the `OutlookAligner-Phase1-Probe-win-x64` artifact.
-4. Extract the ZIP on the Windows PC that has Classic Outlook and the target Outlook profile configured.
-5. Open PowerShell in the extracted folder.
+## Usage
 
 Default 90-day privacy-safe scan:
 
@@ -82,21 +87,21 @@ Privacy-safe JSON:
 .\OutlookAligner.OutlookHost.exe --days 90 --json
 ```
 
-Explicitly include subjects and locations for manual inspection:
+Explicitly include subjects and locations:
 
 ```powershell
 .\OutlookAligner.OutlookHost.exe --days 14 --include-details
 ```
 
-Show usage without opening Outlook:
+Validate packaged interop metadata without opening Outlook:
 
 ```powershell
-.\OutlookAligner.OutlookHost.exe --help
+.\OutlookAligner.OutlookHost.exe --interop-check
 ```
 
 ## Expected result
 
-For each configured account, the console should show:
+For each configured account, the console shows:
 
 - display name;
 - SMTP address where Outlook exposes one;
@@ -109,13 +114,13 @@ When `--include-details` is enabled, console event rows show both Subject and Lo
 
 The JSON mode additionally exposes the extracted read-only DTO fields, including StoreID/EntryID locator data, GlobalAppointmentID where available, Start/End, recurrence state, busy state, and sensitivity.
 
-## Manual acceptance test — merge gate
+## Historical/manual acceptance checklist
 
-Hosted CI cannot validate the user's real Outlook profile. **Phase 1 must not be merged until this real Classic Outlook acceptance suite has passed.**
-
-Run these on the Windows PC with the real three-account Classic Outlook profile:
+These scenarios remain useful regression tests even though only the successful live probe itself was explicitly reported before merge:
 
 - [ ] `--help` runs without starting/touching Outlook.
+- [x] `--interop-check` succeeds in hosted CI and the repaired package runs on the user's machine.
+- [x] A real 14-day Classic Outlook probe completes successfully on the user's machine.
 - [ ] With Classic Outlook already running, the default probe completes successfully.
 - [ ] With Classic Outlook completely exited, the probe cold-starts/initializes the default profile and completes successfully.
 - [ ] All three expected accounts are listed.
@@ -141,7 +146,7 @@ Run these on the Windows PC with the real three-account Classic Outlook profile:
 
 ## Hosted CI acceptance
 
-Run `34112886367` on commit `135d192a52201ba789277425c8e4395e1b343874` completed all hosted gates successfully:
+Final Phase 1 head completed all hosted gates successfully:
 
 - [x] formatter/analyzer gate passes;
 - [x] Release solution build passes;
@@ -149,27 +154,27 @@ Run `34112886367` on commit `135d192a52201ba789277425c8e4395e1b343874` completed
 - [x] benchmark project compiles;
 - [x] NuGet/npm audits pass;
 - [x] self-contained `win-x64` publish succeeds;
-- [x] published executable passes a `--help` smoke test on the hosted Windows runner;
+- [x] published executable passes `--help`;
+- [x] published executable passes `--interop-check`;
 - [x] executable artifact is uploaded successfully.
 
-Hosted tests cover CLI horizon bounds/errors, half-open filter semantics, `en-US` and `nb-NO` filter formatting, defensive JSON redaction, explicit detail output, and a Contracts-layer architecture guard against Outlook interop references.
+Hosted tests cover CLI horizon bounds/errors, half-open filter semantics, `en-US` and `nb-NO` filter formatting, defensive JSON redaction, explicit detail output, an Outlook interop metadata check, and a Contracts-layer architecture guard against Outlook interop references.
 
-## Known limitations in this phase
+## Known limitations carried forward
 
 - Hosted GitHub runners cannot test live Outlook COM because they do not have the user's Outlook profile.
-- Phase 1 does not yet correlate events across accounts; that belongs to the identity phase.
+- Phase 1 does not correlate events across accounts; that belongs to the identity phase.
 - Phase 1 does not test true meeting forwarding; that is Phase 2.
 - It does not write custom Aligner metadata.
-- `DateTime` local Start/End values are acceptable for this diagnostic phase, but the later identity/alignment design must preserve enough timezone/offset semantics for DST and cross-account comparisons.
-- Subject/location output is diagnostic only and opt-in.
+- `DateTime` local Start/End values are acceptable for this diagnostic phase, but later identity/alignment design must preserve enough timezone/offset semantics for DST and cross-account comparisons.
 
 ## Exit codes
 
 - `0` — success/help.
 - `2` — invalid command-line arguments.
 - `3` — Outlook COM activation/read failure.
-- `4` — unexpected probe failure.
+- `4` — unexpected/dependency failure.
 
 ## Handoff to Phase 2
 
-Do not begin the forwarding spike until this PR has green hosted CI, the real three-account manual acceptance suite above has passed, and the user has explicitly merged Phase 1.
+Phase 1 is closed. Phase 2 may now test genuine `MeetingItem.Forward()` behavior in a separate PR. The vCalendar path remains explicitly non-equivalent and must not be mislabeled as native forwarding.

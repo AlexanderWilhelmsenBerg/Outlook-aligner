@@ -9,25 +9,30 @@ The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL 
 ## Project status
 
 - **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
-- **Phase 1 — Outlook COM discovery/read probe: In progress 🚧 (PR-only)**
+- **Phase 1 — Outlook COM discovery/read probe: Complete ✅ / merged in PR #4**
+- **Phase 2 — Native meeting-forwarding technical spike: In progress 🚧 / PR-only**
 
 Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
 
-The Phase 0 implementation baseline passed hosted CI on 2026-09-07 and every direct dependency was reverified against the latest stable release. See [`docs/phase-0.md`](docs/phase-0.md) for the version matrix and verification checkmarks.
+Phase 1 proved the packaged Classic Outlook COM read boundary on the user's real Windows/Outlook profile, including the self-contained interop packaging fix discovered during manual testing. See [`docs/phase-1.md`](docs/phase-1.md).
 
-## Phase 1 test executable
+## Phase 2 test executable
 
-Phase 1 CI publishes a self-contained Windows x64 diagnostic executable as the Actions artifact:
+Phase 2 CI publishes the OutlookHost as a self-contained Windows x64 diagnostic executable. The existing read probe remains available, while the forwarding spike adds explicit inspect/prepare/send modes.
 
-`OutlookAligner-Phase1-Probe-win-x64`
-
-After downloading/extracting it on the Windows PC with Classic Outlook configured, run:
+First identify a real accepted meeting and its `GlobalAppointmentId` from the read probe:
 
 ```powershell
-.\OutlookAligner.OutlookHost.exe --days 90
+.\OutlookAligner.OutlookHost.exe --days 90 --json --include-details
 ```
 
-The probe is read-only and withholds event subjects/locations by default. See [`docs/phase-1.md`](docs/phase-1.md) for download instructions, CLI options, and the manual acceptance checklist.
+Then inspect whether Outlook still retains the native meeting request for a chosen source account:
+
+```powershell
+.\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID
+```
+
+Use `--forward-spike --help` for the deliberately gated prepare/send commands. No vCalendar fallback is used. See [`docs/phase-2.md`](docs/phase-2.md).
 
 ## Verified toolchain baseline
 
@@ -55,10 +60,11 @@ Run:
 ./scripts/verify.ps1
 ```
 
-Classic Outlook is required only for the Phase 1 manual COM integration probe, not for normal hosted build/unit-test gates.
+Classic Outlook is required for live Phase 1/2 COM testing, not for normal hosted build/unit-test gates.
 
 ## Documentation
 
 - [`plan.md`](plan.md) — product, architecture, safety rules, phases, and acceptance criteria.
 - [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
-- [`docs/phase-1.md`](docs/phase-1.md) — read-only Outlook probe design and test procedure.
+- [`docs/phase-1.md`](docs/phase-1.md) — completed read-only Outlook probe and packaging lessons.
+- [`docs/phase-2.md`](docs/phase-2.md) — native meeting-forwarding spike design and manual acceptance procedure.

@@ -1,0 +1,234 @@
+namespace OutlookAligner.OutlookHost.Forwarding;
+
+internal enum ForwardSpikeAction
+{
+    Inspect,
+    Prepare,
+    Send,
+}
+
+internal sealed record ForwardSpikeOptions(
+    string SourceSmtp,
+    string GlobalAppointmentId,
+    ForwardSpikeAction Action,
+    string? Recipient,
+    bool IncludeDetails,
+    bool ShowHelp)
+{
+    internal const string ConfirmationToken = "SEND-NATIVE-MEETING";
+
+    internal static bool IsRequested(IReadOnlyList<string> args)
+        => args.Any(argument => string.Equals(
+            argument,
+            "--forward-spike",
+            StringComparison.OrdinalIgnoreCase));
+
+    internal static bool TryParse(
+        IReadOnlyList<string> args,
+        out ForwardSpikeOptions options,
+        out string? error)
+    {
+        string? sourceSmtp = null;
+        string? globalAppointmentId = null;
+        string? recipient = null;
+        string? confirmation = null;
+        var includeDetails = false;
+        var showHelp = false;
+        var prepare = false;
+        var send = false;
+
+        for (var index = 0; index < args.Count; index++)
+        {
+            var argument = args[index];
+
+            if (string.Equals(argument, "--forward-spike", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (string.Equals(argument, "--prepare", StringComparison.OrdinalIgnoreCase))
+            {
+                prepare = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--send", StringComparison.OrdinalIgnoreCase))
+            {
+                send = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--include-details", StringComparison.OrdinalIgnoreCase))
+            {
+                includeDetails = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--help", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(argument, "-h", StringComparison.OrdinalIgnoreCase))
+            {
+                showHelp = true;
+                continue;
+            }
+
+            if (!TryReadValue(args, ref index, "--source-smtp", argument, out var value, out error)
+                && !TryReadValue(args, ref index, "--global-id", argument, out value, out error)
+                && !TryReadValue(args, ref index, "--to", argument, out value, out error)
+                && !TryReadValue(args, ref index, "--confirm-send", argument, out value, out error))
+            {
+                if (error is not null)
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                options = Empty();
+                error = $"Unknown forwarding-spike argument: {argument}";
+                return false;
+            }
+
+            if (MatchesOption(argument, "--source-smtp"))
+            {
+                sourceSmtp = value;
+            }
+            else if (MatchesOption(argument, "--global-id"))
+            {
+                globalAppointmentId = value;
+            }
+            else if (MatchesOption(argument, "--to"))
+            {
+                recipient = value;
+            }
+            else
+            {
+                confirmation = value;
+            }
+        }
+
+        if (showHelp)
+        {
+            options = new ForwardSpikeOptions(
+                string.Empty,
+                string.Empty,
+                ForwardSpikeAction.Inspect,
+                null,
+                includeDetails,
+                ShowHelp: true);
+            error = null;
+            return true;
+        }
+
+        if (prepare && send)
+        {
+            options = Empty();
+            error = "--prepare and --send are mutually exclusive.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(sourceSmtp))
+        {
+            options = Empty();
+            error = "--source-smtp is required for the forwarding spike.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(globalAppointmentId))
+        {
+            options = Empty();
+            error = "--global-id is required for the forwarding spike.";
+            return false;
+        }
+
+        var action = send
+            ? ForwardSpikeAction.Send
+            : prepare
+                ? ForwardSpikeAction.Prepare
+                : ForwardSpikeAction.Inspect;
+
+        if (action is ForwardSpikeAction.Prepare or ForwardSpikeAction.Send
+            && string.IsNullOrWhiteSpace(recipient))
+        {
+            options = Empty();
+            error = "--to is required with --prepare or --send.";
+            return false;
+        }
+
+        if (action == ForwardSpikeAction.Send
+            && !string.Equals(confirmation, ConfirmationToken, StringComparison.Ordinal))
+        {
+            options = Empty();
+            error = $"--send requires --confirm-send {ConfirmationToken}.";
+            return false;
+        }
+
+        if (action != ForwardSpikeAction.Send && confirmation is not null)
+        {
+            options = Empty();
+            error = "--confirm-send is valid only together with --send.";
+            return false;
+        }
+
+        options = new ForwardSpikeOptions(
+            sourceSmtp,
+            globalAppointmentId,
+            action,
+            recipient,
+            includeDetails,
+            ShowHelp: false);
+        error = null;
+        return true;
+    }
+
+    private static bool TryReadValue(
+        IReadOnlyList<string> args,
+        ref int index,
+        string optionName,
+        string argument,
+        out string? value,
+        out string? error)
+    {
+        value = null;
+        error = null;
+
+        if (argument.StartsWith(optionName + "=", StringComparison.OrdinalIgnoreCase))
+        {
+            value = argument[(optionName.Length + 1)..];
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                error = $"{optionName} requires a value.";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (++index >= args.Count
+            || string.IsNullOrWhiteSpace(args[index])
+            || args[index].StartsWith("--", StringComparison.Ordinal))
+        {
+            error = $"{optionName} requires a value.";
+            return false;
+        }
+
+        value = args[index];
+        return true;
+    }
+
+    private static bool MatchesOption(string argument, string optionName)
+        => string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase)
+            || argument.StartsWith(optionName + "=", StringComparison.OrdinalIgnoreCase);
+
+    private static ForwardSpikeOptions Empty()
+        => new(
+            string.Empty,
+            string.Empty,
+            ForwardSpikeAction.Inspect,
+            null,
+            IncludeDetails: false,
+            ShowHelp: false);
+}
