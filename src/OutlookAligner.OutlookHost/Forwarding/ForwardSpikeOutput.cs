@@ -8,11 +8,13 @@ internal static class ForwardSpikeOutput
 
         var writer = result.Success ? Console.Out : Console.Error;
         writer.WriteLine("Outlook Aligner — Phase 2 native forwarding spike");
-        writer.WriteLine($"Mode: {FormatAction(result.Action)}");
+        writer.WriteLine($"Mode: {result.Action.ToString().ToLowerInvariant()}");
         writer.WriteLine($"Source account: {result.SourceSmtp}");
         writer.WriteLine($"GlobalAppointmentId: {result.GlobalAppointmentId}");
 
-        if (result.Action is ForwardSpikeAction.ProbeCalendarCommand or ForwardSpikeAction.PrepareCalendarCommand)
+        if (result.Action is ForwardSpikeAction.ProbeCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarCommand
+            or ForwardSpikeAction.PrepareCalendarRecipient)
         {
             if (result.CommandProbe is not null)
             {
@@ -68,36 +70,32 @@ internal static class ForwardSpikeOutput
         Console.WriteLine("Probe the accepted Calendar item's built-in Forward command without executing it:");
         Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --probe-calendar-command --entry-id ENTRY_ID");
         Console.WriteLine();
-        Console.WriteLine("Execute Outlook's Calendar Forward command, capture AppointmentItem.Forward, and cancel it before completion/display:");
+        Console.WriteLine("Execute Calendar Forward, observe the native MeetingItem, and cancel before completion:");
         Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --prepare-calendar-command --entry-id ENTRY_ID");
         Console.WriteLine();
-        Console.WriteLine("Invoke MeetingItem.Forward(), resolve a recipient, then discard without sending:");
+        Console.WriteLine("Create the Calendar Forward, resolve exactly one recipient, pin the source account, then discard unsent:");
+        Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --prepare-calendar-recipient --entry-id ENTRY_ID --to ADDRESS");
+        Console.WriteLine();
+        Console.WriteLine("Invoke retained MeetingItem.Forward(), resolve a recipient, then discard without sending:");
         Console.WriteLine("  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --prepare --to ADDRESS");
         Console.WriteLine();
-        Console.WriteLine("Actually send the native retained-request forwarded meeting:");
+        Console.WriteLine("Actually send the retained-request native forwarded meeting:");
         Console.WriteLine(
             $"  OutlookAligner.OutlookHost.exe --forward-spike --source-smtp ADDRESS --global-id ID --send --to ADDRESS --confirm-send {ForwardSpikeOptions.ConfirmationToken}");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  --source-smtp ADDRESS       Select the Outlook account/store that received the meeting.");
-        Console.WriteLine("  --global-id ID              GlobalAppointmentID copied from the read probe.");
-        Console.WriteLine("  --probe-calendar-command    Query Outlook's built-in Forward command without executing it.");
-        Console.WriteLine("  --prepare-calendar-command  Execute the built-in Forward command but cancel AppointmentItem.Forward inside the event before completion/display.");
-        Console.WriteLine("  --entry-id ENTRY_ID         Calendar EntryID required by either Calendar-command mode.");
-        Console.WriteLine("  --prepare                   Create a native retained-request forward, resolve the recipient, then discard it unsent.");
-        Console.WriteLine("  --send                      Send the native retained-request forward. Requires the exact confirmation token.");
-        Console.WriteLine("  --to ADDRESS                Recipient for retained-request prepare/send modes only.");
-        Console.WriteLine("  --include-details           Show the matched/verified meeting subject. Off by default.");
-        Console.WriteLine("  --help, -h                  Show this help without opening Outlook.");
+        Console.WriteLine("  --source-smtp ADDRESS          Select the Outlook account/store that received the meeting.");
+        Console.WriteLine("  --global-id ID                 GlobalAppointmentID copied from the read probe.");
+        Console.WriteLine("  --probe-calendar-command       Query Outlook's built-in Forward command state without executing it.");
+        Console.WriteLine("  --prepare-calendar-command     Execute Calendar Forward and cancel inside AppointmentItem.Forward before completion.");
+        Console.WriteLine("  --prepare-calendar-recipient   Allow Calendar Forward to create its native MeetingItem, resolve one recipient, then discard unsent.");
+        Console.WriteLine("  --entry-id ENTRY_ID            Calendar EntryID required by Calendar command modes.");
+        Console.WriteLine("  --prepare                      Prepare/discard through a retained native MeetingItem.");
+        Console.WriteLine("  --send                         Send through the retained native MeetingItem path. Requires exact confirmation token.");
+        Console.WriteLine("  --to ADDRESS                   Recipient for retained prepare/send and Calendar recipient-prepare modes.");
+        Console.WriteLine("  --include-details              Show the matched/verified meeting subject. Off by default.");
+        Console.WriteLine("  --help, -h                     Show this help without opening Outlook.");
         Console.WriteLine();
-        Console.WriteLine("No vCalendar fallback is used. Calendar prepare sets Cancel=True in AppointmentItem.Forward and never supplies a recipient or calls Send/Save.");
+        Console.WriteLine("No vCalendar fallback is used. Calendar recipient-prepare resolves one recipient but never calls Send() or Save().");
     }
-
-    private static string FormatAction(ForwardSpikeAction action)
-        => action switch
-        {
-            ForwardSpikeAction.ProbeCalendarCommand => "probe-calendar-command",
-            ForwardSpikeAction.PrepareCalendarCommand => "prepare-calendar-command",
-            _ => action.ToString().ToLowerInvariant(),
-        };
 }
