@@ -33,9 +33,9 @@ public sealed class CalendarEventRowViewModel
     public string MeetingStatusDisplay => CalendarEvent.MeetingStatus switch
     {
         "olNonMeeting" => "Appointment (not a meeting)",
-        "olMeeting" => "Meeting",
+        "olMeeting" => "Organizer meeting",
         "olMeetingReceived" => "Received meeting",
-        "olMeetingCanceled" => "Canceled meeting",
+        "olMeetingCanceled" => "Canceled organizer meeting",
         "olMeetingReceivedAndCanceled" => "Received canceled meeting",
         _ => CalendarEvent.MeetingStatus,
     };
@@ -48,12 +48,10 @@ public sealed class CalendarEventRowViewModel
     public bool CanUseNativeForward
         => HasNativeIdentity
             && !CalendarEvent.IsRecurring
-            && CalendarEvent.MeetingStatus is not "olNonMeeting"
-            && CalendarEvent.MeetingStatus is not "olMeetingCanceled"
-            && CalendarEvent.MeetingStatus is not "olMeetingReceivedAndCanceled";
+            && CalendarEvent.MeetingStatus == "olMeetingReceived";
 
     // MainViewModel's current command gate uses this property. In this increment,
-    // "forward identity" means identity plus a meeting type whose Forward semantics are proven.
+    // "forward identity" means identity plus the exact received-meeting case proven in Phase 2.
     public bool HasForwardIdentity => CanUseNativeForward;
 
     public string ForwardEligibilityLabel => CanUseNativeForward ? "Ready to check" : "Not available for this item";
@@ -72,6 +70,11 @@ public sealed class CalendarEventRowViewModel
                 return "This is an Outlook appointment without meeting attendees. Meeting Forward does not apply.";
             }
 
+            if (CalendarEvent.MeetingStatus == "olMeeting")
+            {
+                return "This meeting belongs to this account as organizer. The proven attendee Forward path does not apply; organizer-side meeting actions will be handled separately.";
+            }
+
             if (CalendarEvent.MeetingStatus is "olMeetingCanceled" or "olMeetingReceivedAndCanceled")
             {
                 return "This meeting is canceled, so Outlook Aligner will not prepare a Forward action.";
@@ -82,7 +85,12 @@ public sealed class CalendarEventRowViewModel
                 return "Recurring meeting Forward is intentionally disabled in this increment until occurrence-versus-series identity is implemented safely.";
             }
 
-            return "This one-off meeting can be checked against Outlook's native Forward capability.";
+            if (CalendarEvent.MeetingStatus != "olMeetingReceived")
+            {
+                return $"Outlook reports meeting status '{CalendarEvent.MeetingStatus}', which is outside the native Forward cases proven so far.";
+            }
+
+            return "This one-off received meeting can be checked against Outlook's native Forward capability.";
         }
     }
 }
