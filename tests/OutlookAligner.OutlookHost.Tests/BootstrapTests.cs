@@ -10,9 +10,9 @@ namespace OutlookAligner.OutlookHost.Tests;
 public sealed class BootstrapTests
 {
     [Fact]
-    public void ProtocolVersionStartsAtOne()
+    public void ProtocolVersionReflectsManagedCopyMetadataContract()
     {
-        Assert.Equal(1, OutlookHostProtocol.Version);
+        Assert.Equal(2, OutlookHostProtocol.Version);
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public sealed class BootstrapTests
             Error: null);
 
         return new OutlookProbeResult(
-            ProtocolVersion: 1,
+            ProtocolVersion: OutlookHostProtocol.Version,
             CapturedAtUtc: new DateTime(2026, 9, 7, 7, 0, 0, DateTimeKind.Utc),
             WindowStartLocal: start.Date,
             WindowEndLocal: start.Date.AddDays(90),
