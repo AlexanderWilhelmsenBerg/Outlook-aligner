@@ -153,7 +153,7 @@ public sealed partial class MainWindow : Window
     {
         _ = sender;
 
-        if (e.PropertyName == nameof(MainViewModel.NoticeMessage)
+        if (e.PropertyName is nameof(MainViewModel.NoticeMessage) or nameof(MainViewModel.HasNotice)
             && ViewModel.HasNotice
             && !string.IsNullOrWhiteSpace(ViewModel.NoticeMessage)
             && !string.Equals(_lastNoticeLogged, ViewModel.NoticeMessage, StringComparison.Ordinal))
