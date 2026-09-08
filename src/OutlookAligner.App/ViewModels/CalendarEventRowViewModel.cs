@@ -40,25 +40,29 @@ public sealed class CalendarEventRowViewModel
         _ => CalendarEvent.MeetingStatus,
     };
 
-    public bool HasForwardIdentity
+    public bool HasNativeIdentity
         => !string.IsNullOrWhiteSpace(Account.SmtpAddress)
             && !string.IsNullOrWhiteSpace(CalendarEvent.EntryId)
             && !string.IsNullOrWhiteSpace(CalendarEvent.GlobalAppointmentId);
 
     public bool CanUseNativeForward
-        => HasForwardIdentity
+        => HasNativeIdentity
             && !CalendarEvent.IsRecurring
             && CalendarEvent.MeetingStatus is not "olNonMeeting"
             && CalendarEvent.MeetingStatus is not "olMeetingCanceled"
             && CalendarEvent.MeetingStatus is not "olMeetingReceivedAndCanceled";
 
-    public string ForwardEligibilityLabel => CanUseNativeForward ? "Not checked" : "Not available for this item";
+    // MainViewModel's current command gate uses this property. In this increment,
+    // "forward identity" means identity plus a meeting type whose Forward semantics are proven.
+    public bool HasForwardIdentity => CanUseNativeForward;
+
+    public string ForwardEligibilityLabel => CanUseNativeForward ? "Ready to check" : "Not available for this item";
 
     public string ForwardEligibilityMessage
     {
         get
         {
-            if (!HasForwardIdentity)
+            if (!HasNativeIdentity)
             {
                 return "Outlook did not provide enough native identity for safe meeting Forward.";
             }
