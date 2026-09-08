@@ -57,6 +57,31 @@ Normal v1 operation must not require PowerShell or CLI arguments. Write actions 
 
 For **Forward meeting**, the production GUI treats native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events fail closed with a clear explanation. The retained-request diagnostic path is not exposed as a separate user-facing action.
 
+## Update the current test app
+
+During development, use the updater instead of manually opening GitHub Actions and replacing extracted artifacts:
+
+```powershell
+./scripts/Update-OutlookAlignerTestApp.ps1
+```
+
+One-time prerequisite: install and authenticate GitHub CLI (`gh`). The updater finds the latest **successful push CI** build from `phase-3/ui-assisted-testing`, downloads `OutlookAligner-Phase3-UI-TestHarness-win-x64`, verifies that the UI and OutlookHost executables are present, and installs it under `%LOCALAPPDATA%\OutlookAligner\TestApp`. The previous build is retained as `%LOCALAPPDATA%\OutlookAligner\TestApp.previous`, and the updated app launches automatically.
+
+Useful options:
+
+```powershell
+# Update without launching.
+./scripts/Update-OutlookAlignerTestApp.ps1 -NoLaunch
+
+# Redownload even if the latest CI run is already installed.
+./scripts/Update-OutlookAlignerTestApp.ps1 -Force
+
+# Also remove downloaded-file zone markers from the verified artifact files.
+./scripts/Update-OutlookAlignerTestApp.ps1 -UnblockFiles
+```
+
+The persistent diagnostics log is stored separately under `%LOCALAPPDATA%\OutlookAligner\events.jsonl`, so updating the test app does not erase test history.
+
 ## Verified toolchain baseline
 
 - .NET SDK 10.0.400 / .NET 10.0.11 / C# 14
