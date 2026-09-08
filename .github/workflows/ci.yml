@@ -22,6 +22,20 @@ jobs:
         run: dotnet restore OutlookAligner.sln
       - name: Verify formatting
         run: dotnet format OutlookAligner.sln --verify-no-changes --no-restore
+      - name: Validate PowerShell updater
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path .\scripts\Update-OutlookAlignerTestApp.ps1),
+            [ref]$tokens,
+            [ref]$errors) | Out-Null
+
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "Update-OutlookAlignerTestApp.ps1 contains PowerShell parser errors."
+          }
       - name: Build
         run: dotnet build OutlookAligner.sln -c Release --no-restore
       - name: Test with coverage
