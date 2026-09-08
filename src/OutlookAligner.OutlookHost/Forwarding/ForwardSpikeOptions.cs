@@ -6,6 +6,7 @@ internal enum ForwardSpikeAction
     ProbeCalendarCommand,
     PrepareCalendarCommand,
     PrepareCalendarRecipient,
+    SendCalendarCommand,
     Prepare,
     Send,
 }
@@ -20,6 +21,7 @@ internal sealed record ForwardSpikeOptions(
     bool ShowHelp)
 {
     internal const string ConfirmationToken = "SEND-NATIVE-MEETING";
+    internal const string CalendarConfirmationToken = "SEND-CALENDAR-FORWARD";
 
     internal static bool IsRequested(IReadOnlyList<string> args)
         => args.Any(argument => string.Equals(
@@ -37,11 +39,13 @@ internal sealed record ForwardSpikeOptions(
         string? calendarEntryId = null;
         string? recipient = null;
         string? confirmation = null;
+        string? calendarConfirmation = null;
         var includeDetails = false;
         var showHelp = false;
         var probeCalendarCommand = false;
         var prepareCalendarCommand = false;
         var prepareCalendarRecipient = false;
+        var sendCalendarCommand = false;
         var prepare = false;
         var send = false;
 
@@ -69,6 +73,12 @@ internal sealed record ForwardSpikeOptions(
             if (string.Equals(argument, "--prepare-calendar-recipient", StringComparison.OrdinalIgnoreCase))
             {
                 prepareCalendarRecipient = true;
+                continue;
+            }
+
+            if (string.Equals(argument, "--send-calendar-command", StringComparison.OrdinalIgnoreCase))
+            {
+                sendCalendarCommand = true;
                 continue;
             }
 
@@ -152,6 +162,17 @@ internal sealed record ForwardSpikeOptions(
                 continue;
             }
 
+            if (MatchesOption(argument, "--confirm-calendar-send"))
+            {
+                if (!TryReadValue(args, ref index, "--confirm-calendar-send", argument, out calendarConfirmation, out error))
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                continue;
+            }
+
             options = Empty();
             error = $"Unknown forwarding-spike argument: {argument}";
             return false;
@@ -174,12 +195,13 @@ internal sealed record ForwardSpikeOptions(
         var requestedActions = (probeCalendarCommand ? 1 : 0)
             + (prepareCalendarCommand ? 1 : 0)
             + (prepareCalendarRecipient ? 1 : 0)
+            + (sendCalendarCommand ? 1 : 0)
             + (prepare ? 1 : 0)
             + (send ? 1 : 0);
         if (requestedActions > 1)
         {
             options = Empty();
-            error = "--probe-calendar-command, --prepare-calendar-command, --prepare-calendar-recipient, --prepare, and --send are mutually exclusive.";
+            error = "Calendar probe/prepare/send modes and retained-request prepare/send modes are mutually exclusive.";
             return false;
         }
 
@@ -201,17 +223,20 @@ internal sealed record ForwardSpikeOptions(
             ? ForwardSpikeAction.Send
             : prepare
                 ? ForwardSpikeAction.Prepare
-                : prepareCalendarRecipient
-                    ? ForwardSpikeAction.PrepareCalendarRecipient
-                    : prepareCalendarCommand
-                        ? ForwardSpikeAction.PrepareCalendarCommand
-                        : probeCalendarCommand
-                            ? ForwardSpikeAction.ProbeCalendarCommand
-                            : ForwardSpikeAction.Inspect;
+                : sendCalendarCommand
+                    ? ForwardSpikeAction.SendCalendarCommand
+                    : prepareCalendarRecipient
+                        ? ForwardSpikeAction.PrepareCalendarRecipient
+                        : prepareCalendarCommand
+                            ? ForwardSpikeAction.PrepareCalendarCommand
+                            : probeCalendarCommand
+                                ? ForwardSpikeAction.ProbeCalendarCommand
+                                : ForwardSpikeAction.Inspect;
 
         if (action is ForwardSpikeAction.ProbeCalendarCommand
             or ForwardSpikeAction.PrepareCalendarCommand
             or ForwardSpikeAction.PrepareCalendarRecipient
+            or ForwardSpikeAction.SendCalendarCommand
             && string.IsNullOrWhiteSpace(calendarEntryId))
         {
             options = Empty();
@@ -221,7 +246,8 @@ internal sealed record ForwardSpikeOptions(
 
         if (action is not (ForwardSpikeAction.ProbeCalendarCommand
             or ForwardSpikeAction.PrepareCalendarCommand
-            or ForwardSpikeAction.PrepareCalendarRecipient)
+            or ForwardSpikeAction.PrepareCalendarRecipient
+            or ForwardSpikeAction.SendCalendarCommand)
             && calendarEntryId is not null)
         {
             options = Empty();
@@ -229,7 +255,10 @@ internal sealed record ForwardSpikeOptions(
             return false;
         }
 
-        if (action is ForwardSpikeAction.Prepare or ForwardSpikeAction.Send or ForwardSpikeAction.PrepareCalendarRecipient
+        if (action is ForwardSpikeAction.Prepare
+            or ForwardSpikeAction.Send
+            or ForwardSpikeAction.PrepareCalendarRecipient
+            or ForwardSpikeAction.SendCalendarCommand
             && string.IsNullOrWhiteSpace(recipient))
         {
             options = Empty();
@@ -253,10 +282,25 @@ internal sealed record ForwardSpikeOptions(
             return false;
         }
 
+        if (action == ForwardSpikeAction.SendCalendarCommand
+            && !string.Equals(calendarConfirmation, CalendarConfirmationToken, StringComparison.Ordinal))
+        {
+            options = Empty();
+            error = $"--send-calendar-command requires --confirm-calendar-send {CalendarConfirmationToken}.";
+            return false;
+        }
+
         if (action != ForwardSpikeAction.Send && confirmation is not null)
         {
             options = Empty();
             error = "--confirm-send is valid only together with --send.";
+            return false;
+        }
+
+        if (action != ForwardSpikeAction.SendCalendarCommand && calendarConfirmation is not null)
+        {
+            options = Empty();
+            error = "--confirm-calendar-send is valid only together with --send-calendar-command.";
             return false;
         }
 
