@@ -13,12 +13,12 @@ internal sealed class OutlookHostProcessClient
         PropertyNameCaseInsensitive = true,
     };
 
-    private readonly AppEventLog? _eventLog;
+    private readonly AppEventLog _eventLog;
     private readonly string? _hostPathOverride;
 
     internal OutlookHostProcessClient(AppEventLog? eventLog = null, string? hostPathOverride = null)
     {
-        _eventLog = eventLog;
+        _eventLog = eventLog ?? AppEventLog.Current;
         _hostPathOverride = hostPathOverride;
     }
 
@@ -99,7 +99,7 @@ internal sealed class OutlookHostProcessClient
             startInfo.ArgumentList.Add(argument);
         }
 
-        _eventLog?.Debug(
+        _eventLog.Debug(
             "OutlookHost",
             $"Starting {operation}.",
             details: $"Executable: {Path.GetFileName(hostPath)}; options: {DescribeOptions(arguments)}");
@@ -108,7 +108,7 @@ internal sealed class OutlookHostProcessClient
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
         {
-            _eventLog?.Error("OutlookHost", $"Could not start {operation}.");
+            _eventLog.Error("OutlookHost", $"Could not start {operation}.");
             throw new InvalidOperationException("OutlookHost could not be started.");
         }
 
@@ -122,7 +122,7 @@ internal sealed class OutlookHostProcessClient
         catch (OperationCanceledException)
         {
             TryKill(process);
-            _eventLog?.Warning(
+            _eventLog.Warning(
                 "OutlookHost",
                 $"{operation} was canceled after {stopwatch.ElapsedMilliseconds} ms.");
             throw;
@@ -140,11 +140,11 @@ internal sealed class OutlookHostProcessClient
 
         if (result.Success)
         {
-            _eventLog?.Debug("OutlookHost", $"{operation} completed successfully.", details: details);
+            _eventLog.Debug("OutlookHost", $"{operation} completed successfully.", details: details);
         }
         else
         {
-            _eventLog?.Warning("OutlookHost", $"{operation} returned exit code {result.ExitCode}.", details: details);
+            _eventLog.Warning("OutlookHost", $"{operation} returned exit code {result.ExitCode}.", details: details);
         }
 
         return result;
