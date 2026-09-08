@@ -15,10 +15,12 @@ public sealed class MainViewModel : ObservableObject
     private OutlookAccountChoice? _selectedTargetAccount;
     private double _scanDays = 90;
     private bool _isBusy;
+    private bool _hasNotice;
     private string _status = "Ready to read Classic Outlook.";
     private string _forwardCapability = "Not checked";
     private string _lastDiagnostics = "No diagnostics yet.";
     private string _alignmentSummary = "Refresh Outlook to build the alignment view.";
+    private string _noticeMessage = string.Empty;
 
     public MainViewModel()
     {
@@ -91,6 +93,12 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public bool HasNotice
+    {
+        get => _hasNotice;
+        private set => SetProperty(ref _hasNotice, value);
+    }
+
     public string Status
     {
         get => _status;
@@ -115,9 +123,16 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _alignmentSummary, value);
     }
 
+    public string NoticeMessage
+    {
+        get => _noticeMessage;
+        private set => SetProperty(ref _noticeMessage, value);
+    }
+
     private async Task RefreshAsync()
     {
         IsBusy = true;
+        ClearNotice();
         Status = "Reading Outlook accounts and calendars…";
         ForwardCapability = "Not checked";
 
@@ -148,12 +163,19 @@ public sealed class MainViewModel : ObservableObject
             SelectedEvent = Events.FirstOrDefault();
             LastDiagnostics = BuildScanDiagnostics(result);
             Status = $"Loaded {Events.Count} events from {Accounts.Count} Outlook accounts for {days} days.";
+
+            var failedAccounts = result.Accounts.Count(account => !string.IsNullOrWhiteSpace(account.Error));
+            if (failedAccounts > 0 || result.Warnings.Count > 0)
+            {
+                ShowNotice($"Outlook was loaded with partial results ({failedAccounts} account errors, {result.Warnings.Count} warnings). See Diagnostics for details.");
+            }
         }
         catch (Exception exception) when (exception is InvalidOperationException or FileNotFoundException or JsonException)
         {
-            Status = "Outlook refresh failed. Open Diagnostics for details.";
+            Status = "Outlook refresh failed.";
             LastDiagnostics = exception.Message;
             AlignmentSummary = "Alignment could not be rebuilt because Outlook refresh failed.";
+            ShowNotice("Outlook calendars could not be refreshed. Technical details are available in Diagnostics.");
         }
         finally
         {
@@ -169,6 +191,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         IsBusy = true;
+        ClearNotice();
         Status = $"Checking native Forward for {SelectedEvent!.Subject}…";
 
         try
@@ -179,12 +202,18 @@ public sealed class MainViewModel : ObservableObject
             Status = result.Success
                 ? "Native Outlook Forward is available for the selected meeting."
                 : "Native Outlook Forward is unavailable for the selected meeting.";
+
+            if (!result.Success)
+            {
+                ShowNotice("Outlook does not currently expose a safe native Forward action for this meeting. Nothing was changed.");
+            }
         }
         catch (Exception exception) when (exception is InvalidOperationException or FileNotFoundException)
         {
             ForwardCapability = "Check failed";
-            Status = "Forward capability check failed. Open Diagnostics for details.";
+            Status = "Forward capability check failed.";
             LastDiagnostics = exception.Message;
+            ShowNotice("Forward capability could not be checked. Nothing was changed; see Diagnostics for details.");
         }
         finally
         {
@@ -202,6 +231,7 @@ public sealed class MainViewModel : ObservableObject
 
         var recipient = SelectedTargetAccount.SmtpAddress;
         IsBusy = true;
+        ClearNotice();
         Status = $"Checking and preparing native Forward to {recipient}…";
 
         try
@@ -212,6 +242,7 @@ public sealed class MainViewModel : ObservableObject
                 ForwardCapability = "Unavailable";
                 LastDiagnostics = capability.DiagnosticText;
                 Status = "Native Outlook Forward is unavailable; nothing was prepared.";
+                ShowNotice("Outlook no longer reports Forward as available for the selected meeting. The prepare action stopped safely.");
                 return;
             }
 
@@ -220,12 +251,18 @@ public sealed class MainViewModel : ObservableObject
             LastDiagnostics = prepare.DiagnosticText;
             Status = prepare.Success
                 ? $"Native Forward prepared for {recipient} and discarded unsent."
-                : "Forward preparation failed safely. Open Diagnostics for details.";
+                : "Forward preparation failed safely.";
+
+            if (!prepare.Success)
+            {
+                ShowNotice("The native Forward could not be prepared safely. It was not sent; see Diagnostics for details.");
+            }
         }
         catch (Exception exception) when (exception is InvalidOperationException or FileNotFoundException)
         {
-            Status = "Forward preparation failed. Open Diagnostics for details.";
+            Status = "Forward preparation failed.";
             LastDiagnostics = exception.Message;
+            ShowNotice("Forward preparation failed before completion. Nothing was intentionally sent; see Diagnostics for details.");
         }
         finally
         {
@@ -254,6 +291,7 @@ public sealed class MainViewModel : ObservableObject
 
         Status = "The selected item does not expose enough Outlook identity for native Forward.";
         ForwardCapability = "Unavailable";
+        ShowNotice("This item cannot be forwarded safely because Outlook did not provide the required native meeting identity.");
         return false;
     }
 
@@ -310,6 +348,18 @@ public sealed class MainViewModel : ObservableObject
         var attention = groups.Count(group => group.State != AlignmentState.Aligned);
         var aligned = groups.Count - attention;
         AlignmentSummary = $"{groups.Count} logical rows: {attention} need attention, {aligned} currently aligned. Recurring items remain deliberately unresolved.";
+    }
+
+    private void ClearNotice()
+    {
+        NoticeMessage = string.Empty;
+        HasNotice = false;
+    }
+
+    private void ShowNotice(string message)
+    {
+        NoticeMessage = message;
+        HasNotice = true;
     }
 
     private void NotifyCommandStateChanged()
