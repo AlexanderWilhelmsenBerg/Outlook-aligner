@@ -71,38 +71,53 @@ internal sealed record ForwardSpikeOptions(
                 continue;
             }
 
-            if (!TryReadValue(args, ref index, "--source-smtp", argument, out var value, out error)
-                && !TryReadValue(args, ref index, "--global-id", argument, out value, out error)
-                && !TryReadValue(args, ref index, "--to", argument, out value, out error)
-                && !TryReadValue(args, ref index, "--confirm-send", argument, out value, out error))
+            if (MatchesOption(argument, "--source-smtp"))
             {
-                if (error is not null)
+                if (!TryReadValue(args, ref index, "--source-smtp", argument, out sourceSmtp, out error))
                 {
                     options = Empty();
                     return false;
                 }
 
-                options = Empty();
-                error = $"Unknown forwarding-spike argument: {argument}";
-                return false;
+                continue;
             }
 
-            if (MatchesOption(argument, "--source-smtp"))
+            if (MatchesOption(argument, "--global-id"))
             {
-                sourceSmtp = value;
+                if (!TryReadValue(args, ref index, "--global-id", argument, out globalAppointmentId, out error))
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                continue;
             }
-            else if (MatchesOption(argument, "--global-id"))
+
+            if (MatchesOption(argument, "--to"))
             {
-                globalAppointmentId = value;
+                if (!TryReadValue(args, ref index, "--to", argument, out recipient, out error))
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                continue;
             }
-            else if (MatchesOption(argument, "--to"))
+
+            if (MatchesOption(argument, "--confirm-send"))
             {
-                recipient = value;
+                if (!TryReadValue(args, ref index, "--confirm-send", argument, out confirmation, out error))
+                {
+                    options = Empty();
+                    return false;
+                }
+
+                continue;
             }
-            else
-            {
-                confirmation = value;
-            }
+
+            options = Empty();
+            error = $"Unknown forwarding-spike argument: {argument}";
+            return false;
         }
 
         if (showHelp)
@@ -200,11 +215,6 @@ internal sealed record ForwardSpikeOptions(
             }
 
             return true;
-        }
-
-        if (!string.Equals(argument, optionName, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
         }
 
         if (++index >= args.Count
