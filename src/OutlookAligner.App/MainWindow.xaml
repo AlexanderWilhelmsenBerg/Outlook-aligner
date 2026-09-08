@@ -157,10 +157,61 @@
                         </Grid>
                     </Grid>
 
+                    <Grid x:Name="AlignmentPanel" Visibility="Collapsed" RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock FontSize="28" FontWeight="SemiBold" Text="Alignment" />
+                                <TextBlock
+                                    MaxWidth="850"
+                                    Opacity="0.7"
+                                    Text="Non-recurring meetings are conservatively correlated by native meeting identity. Recurring occurrences stay explicitly unresolved until recurrence identity is proven."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Command="{Binding RefreshCommand}" Content="Refresh Outlook" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <TextBlock Grid.Row="1" Opacity="0.8" Text="{Binding AlignmentSummary}" TextWrapping="Wrap" />
+
+                        <ListView Grid.Row="2" ItemsSource="{Binding AlignmentGroups}" SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="8,10" ColumnSpacing="14" RowSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="2*" />
+                                            <ColumnDefinition Width="2*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding State}" />
+                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding Subject}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{Binding TimeSummary}" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.75" Text="{Binding AccountSummary}" TextWrapping="Wrap" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Opacity="0.7" Text="{Binding Explanation}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+
                     <StackPanel x:Name="PlaceholderPanel" Visibility="Collapsed" MaxWidth="720" HorizontalAlignment="Left" Spacing="10">
                         <TextBlock x:Name="PlaceholderTitle" FontSize="28" FontWeight="SemiBold" />
                         <TextBlock
-                            Text="This destination is part of the production shell. Its full workflow will be implemented in the next slices while Calendar remains usable for Outlook testing."
+                            Text="This destination is part of the production shell and will be filled in as the UI-assisted development phase advances."
                             TextWrapping="Wrap" />
                     </StackPanel>
 
