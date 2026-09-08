@@ -95,7 +95,8 @@ internal static class Program
             var result = options.Action switch
             {
                 ForwardSpikeAction.PrepareCalendarCommand => CalendarForwardCommandExperiment.Run(options),
-                ForwardSpikeAction.PrepareCalendarRecipient => CalendarForwardRecipientExperiment.Run(options),
+                ForwardSpikeAction.PrepareCalendarRecipient or ForwardSpikeAction.SendCalendarCommand
+                    => CalendarForwardRecipientExperiment.Run(options),
                 _ => NativeMeetingForwardSpike.Run(options),
             };
 
