@@ -12,42 +12,33 @@ The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL 
 
 - **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
 - **Phase 1 — Outlook COM discovery/read probe: Complete ✅ / merged in PR #4**
-- **Phase 2 — Native meeting-forwarding technical spike: In progress 🚧 / PR #5**
+- **Phase 2 — Native meeting-forwarding technical spike: end-to-end mechanism proven; reliability matrix in progress 🚧 / PR #5**
 - **Phase 4 — Production WinUI GUI: required for v1; specified now, implemented after identity work**
 
 Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
 
 Phase 1 proved the packaged Classic Outlook COM read boundary on the user's real Windows/Outlook profile, including the self-contained interop packaging fix discovered during manual testing. See [`docs/phase-1.md`](docs/phase-1.md).
 
-## Phase 2 test executable
+## Phase 2 result so far
 
-Phase 2 CI publishes the OutlookHost as a self-contained Windows x64 diagnostic executable. The existing read probe remains available, while the forwarding spike adds deliberately separated inspection/capability/prepare/send modes.
+Phase 2 has proven a genuine native forwarding path on a real accepted Classic Outlook meeting even when the original meeting request is no longer retained in Inbox/Deleted Items.
 
-First identify a real accepted meeting and its `GlobalAppointmentId` + calendar `EntryId` from the read probe:
+The proven path is:
 
-```powershell
-.\OutlookAligner.OutlookHost.exe --days 90 --json --include-details
+```text
+accepted Calendar AppointmentItem
+  -> verify Outlook built-in Forward capability
+  -> ExecuteMso("Forward")
+  -> AppointmentItem.Forward event
+  -> native MeetingItem (IPM.Schedule.Meeting.Request)
+  -> exactly one resolved recipient
+  -> SendUsingAccount = selected source account
+  -> MeetingItem.Send()
 ```
 
-Inspect whether Outlook still retains the native meeting request:
+A real Kverneland meeting was forwarded to another user-controlled Outlook account and arrived there as a forwarded meeting. No `AppointmentItem.ForwardAsVcal()` or fake ICS fallback is used.
 
-```powershell
-.\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID
-```
-
-Non-destructively probe the accepted Calendar appointment's built-in Outlook Forward command without executing Forward:
-
-```powershell
-.\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID --probe-calendar-command --entry-id ENTRY_ID
-```
-
-After that capability probe succeeds, the Calendar prepare/cancel experiment invokes Outlook's built-in Forward command but sets `Cancel=True` inside `AppointmentItem.Forward` before the operation completes or displays the forwarded item:
-
-```powershell
-.\OutlookAligner.OutlookHost.exe --forward-spike --source-smtp source@example.com --global-id GLOBAL_ID --prepare-calendar-command --entry-id ENTRY_ID
-```
-
-This mode does not accept a recipient and does not call `Send()` or `Save()`. Use `--forward-spike --help` for the complete diagnostic command set. No vCalendar fallback is used. See [`docs/phase-2.md`](docs/phase-2.md).
+The remaining Phase 2 work is a deliberately small reliability matrix covering recurrence/Teams behavior, a different source account, and forwarding-disabled behavior if a suitable event is readily available. See [`docs/phase-2.md`](docs/phase-2.md).
 
 ## Production UI
 
@@ -59,6 +50,8 @@ The v1 GUI is not optional. `OutlookAligner.App` will provide a WinUI 3 `Navigat
 - **Diagnostics** — Outlook/IPC health, operation history and technical identifiers.
 
 Normal v1 operation must not require PowerShell or CLI arguments. Write actions will be capability-driven, and bulk writes require preview + explicit confirmation. The detailed UI/UX and Phase 4 acceptance contract is in [`docs/ui.md`](docs/ui.md).
+
+For **Forward meeting**, the production GUI should treat native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events must fail closed with a clear explanation.
 
 ## Verified toolchain baseline
 
@@ -94,4 +87,4 @@ Classic Outlook is required for live Phase 1/2 COM testing, not for normal hoste
 - [`docs/ui.md`](docs/ui.md) — required production GUI/interaction contract.
 - [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
 - [`docs/phase-1.md`](docs/phase-1.md) — completed read-only Outlook probe and packaging lessons.
-- [`docs/phase-2.md`](docs/phase-2.md) — native meeting-forwarding spike design and manual acceptance procedure.
+- [`docs/phase-2.md`](docs/phase-2.md) — native meeting-forwarding spike design, real-machine evidence, and remaining reliability matrix.
