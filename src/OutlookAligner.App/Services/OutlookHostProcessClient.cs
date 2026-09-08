@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using OutlookAligner.App.Diagnostics;
 using OutlookAligner.Outlook.Contracts;
 
 namespace OutlookAligner.App.Services;
@@ -12,10 +13,12 @@ internal sealed class OutlookHostProcessClient
         PropertyNameCaseInsensitive = true,
     };
 
+    private readonly AppEventLog? _eventLog;
     private readonly string? _hostPathOverride;
 
-    internal OutlookHostProcessClient(string? hostPathOverride = null)
+    internal OutlookHostProcessClient(AppEventLog? eventLog = null, string? hostPathOverride = null)
     {
+        _eventLog = eventLog;
         _hostPathOverride = hostPathOverride;
     }
 
@@ -23,6 +26,7 @@ internal sealed class OutlookHostProcessClient
     {
         var result = await RunAsync(
             ["--days", days.ToString(CultureInfo.InvariantCulture), "--json", "--include-details"],
+            "Calendar scan",
             cancellationToken).ConfigureAwait(false);
 
         result.ThrowIfFailed("Outlook calendar scan");
@@ -53,6 +57,7 @@ internal sealed class OutlookHostProcessClient
                 "--entry-id", entryId,
                 "--include-details",
             ],
+            "Forward capability probe",
             cancellationToken);
 
     internal Task<HostCommandResult> PrepareForwardAsync(
@@ -71,15 +76,18 @@ internal sealed class OutlookHostProcessClient
                 "--to", recipient,
                 "--include-details",
             ],
+            "Forward prepare/discard",
             cancellationToken);
 
     private async Task<HostCommandResult> RunAsync(
         IReadOnlyList<string> arguments,
+        string operation,
         CancellationToken cancellationToken)
     {
+        var hostPath = ResolveHostPath();
         var startInfo = new ProcessStartInfo
         {
-            FileName = ResolveHostPath(),
+            FileName = hostPath,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -91,9 +99,16 @@ internal sealed class OutlookHostProcessClient
             startInfo.ArgumentList.Add(argument);
         }
 
+        _eventLog?.Debug(
+            "OutlookHost",
+            $"Starting {operation}.",
+            details: $"Executable: {Path.GetFileName(hostPath)}; options: {DescribeOptions(arguments)}");
+
+        var stopwatch = Stopwatch.StartNew();
         using var process = new Process { StartInfo = startInfo };
         if (!process.Start())
         {
+            _eventLog?.Error("OutlookHost", $"Could not start {operation}.");
             throw new InvalidOperationException("OutlookHost could not be started.");
         }
 
@@ -107,12 +122,32 @@ internal sealed class OutlookHostProcessClient
         catch (OperationCanceledException)
         {
             TryKill(process);
+            _eventLog?.Warning(
+                "OutlookHost",
+                $"{operation} was canceled after {stopwatch.ElapsedMilliseconds} ms.");
             throw;
         }
 
         var standardOutput = await standardOutputTask.ConfigureAwait(false);
         var standardError = await standardErrorTask.ConfigureAwait(false);
-        return new HostCommandResult(process.ExitCode, standardOutput.Trim(), standardError.Trim());
+        stopwatch.Stop();
+
+        var result = new HostCommandResult(process.ExitCode, standardOutput.Trim(), standardError.Trim());
+        var details = $"ExitCode={result.ExitCode}; ElapsedMs={stopwatch.ElapsedMilliseconds}"
+            + (string.IsNullOrWhiteSpace(result.DiagnosticText)
+                ? string.Empty
+                : Environment.NewLine + result.DiagnosticText);
+
+        if (result.Success)
+        {
+            _eventLog?.Debug("OutlookHost", $"{operation} completed successfully.", details: details);
+        }
+        else
+        {
+            _eventLog?.Warning("OutlookHost", $"{operation} returned exit code {result.ExitCode}.", details: details);
+        }
+
+        return result;
     }
 
     private string ResolveHostPath()
@@ -139,6 +174,11 @@ internal sealed class OutlookHostProcessClient
             siblingPath);
     }
 
+    private static string DescribeOptions(IReadOnlyList<string> arguments)
+        => string.Join(
+            ' ',
+            arguments.Where(argument => argument.StartsWith("--", StringComparison.Ordinal)));
+
     private static void TryKill(Process process)
     {
         try
@@ -164,6 +204,11 @@ internal sealed record HostCommandResult(int ExitCode, string StandardOutput, st
             : string.IsNullOrWhiteSpace(StandardOutput)
                 ? StandardError
                 : StandardOutput + Environment.NewLine + StandardError;
+
+    internal string? ResultSummary
+        => DiagnosticText
+            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(line => line.StartsWith("Result: ", StringComparison.Ordinal))?["Result: ".Length..];
 
     internal void ThrowIfFailed(string operation)
     {
