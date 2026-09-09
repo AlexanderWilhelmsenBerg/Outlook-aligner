@@ -59,13 +59,21 @@ For **Forward meeting**, the production GUI treats native forwarding as a capabi
 
 ## Update the current test app
 
-During development, use the updater instead of manually opening GitHub Actions and replacing extracted artifacts:
+During development, use the updater instead of manually opening GitHub Actions and replacing extracted artifacts. The easiest entry point on Windows is:
+
+```text
+scripts\Update-OutlookAlignerTestApp.cmd
+```
+
+or from an existing PowerShell window:
 
 ```powershell
 ./scripts/Update-OutlookAlignerTestApp.ps1
 ```
 
-One-time prerequisite: install and authenticate GitHub CLI (`gh`). The updater finds the latest **successful push CI** build from `phase-3/ui-assisted-testing`, downloads `OutlookAligner-Phase3-UI-TestHarness-win-x64`, verifies that the UI and OutlookHost executables are present, and installs it under `%LOCALAPPDATA%\OutlookAligner\TestApp`. The previous build is retained as `%LOCALAPPDATA%\OutlookAligner\TestApp.previous`, and the updated app launches automatically.
+Administrator rights are **not required**. If GitHub CLI (`gh`) is not installed system-wide, the updater downloads the official portable Windows GitHub CLI ZIP into `%LOCALAPPDATA%\OutlookAligner\Tools\GitHubCLI\gh.exe` and uses that private user copy without modifying machine-wide PATH. On first use, GitHub authentication opens in the browser once; later runs reuse the current-user login.
+
+The updater finds the latest **successful push CI** build from `phase-3/ui-assisted-testing`, downloads `OutlookAligner-Phase3-UI-TestHarness-win-x64`, verifies that the UI and OutlookHost executables are present, and installs it under `%LOCALAPPDATA%\OutlookAligner\TestApp`. The previous build is retained as `%LOCALAPPDATA%\OutlookAligner\TestApp.previous`, and the updated app launches automatically.
 
 Useful options:
 
