@@ -14,15 +14,124 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$script:GhPath = $null
+
 function Write-Step {
     param([Parameter(Mandatory)][string]$Message)
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
+function Get-GitHubCliArchitecture {
+    $architecture = [string]$env:PROCESSOR_ARCHITECTURE
+    if ($architecture -eq "AMD64") {
+        return "amd64"
+    }
+
+    if ($architecture -eq "ARM64") {
+        return "arm64"
+    }
+
+    if ($architecture -eq "x86") {
+        return "386"
+    }
+
+    throw "Unsupported Windows processor architecture '$architecture'."
+}
+
+function Install-PortableGitHubCli {
+    if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+        throw "LOCALAPPDATA is not available in this Windows session."
+    }
+
+    $toolsRoot = Join-Path $env:LOCALAPPDATA "OutlookAligner\Tools\GitHubCLI"
+    $portableGh = Join-Path $toolsRoot "gh.exe"
+    if (Test-Path $portableGh) {
+        return $portableGh
+    }
+
+    Write-Step "GitHub CLI is not installed system-wide; preparing a portable user copy"
+
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("OutlookAligner-gh-" + [Guid]::NewGuid().ToString("N"))
+    try {
+        New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+        New-Item -ItemType Directory -Path $toolsRoot -Force | Out-Null
+
+        # Windows PowerShell 5.1 may otherwise negotiate an obsolete TLS version.
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        }
+        catch {
+            # PowerShell 7 does not need this and may ignore the legacy ServicePointManager path.
+        }
+
+        $headers = @{
+            "User-Agent" = "OutlookAligner-TestUpdater"
+            "Accept" = "application/vnd.github+json"
+        }
+
+        Write-Step "Finding the latest official GitHub CLI portable release"
+        $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/cli/cli/releases/latest" `
+            -Headers $headers `
+            -Method Get
+
+        $architecture = Get-GitHubCliArchitecture
+        $assetPattern = "^gh_[0-9.]+_windows_$architecture\.zip$"
+        $asset = @($release.assets) |
+            Where-Object { [string]$_.name -match $assetPattern } |
+            Select-Object -First 1
+
+        if ($null -eq $asset) {
+            throw "The latest GitHub CLI release did not contain the expected Windows $architecture ZIP asset."
+        }
+
+        $zipPath = Join-Path $tempRoot ([string]$asset.name)
+        $extractPath = Join-Path $tempRoot "extracted"
+
+        Write-Step "Downloading portable GitHub CLI $($release.tag_name)"
+        Invoke-WebRequest `
+            -Uri ([string]$asset.browser_download_url) `
+            -Headers @{ "User-Agent" = "OutlookAligner-TestUpdater" } `
+            -OutFile $zipPath
+
+        Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+        $downloadedGh = Get-ChildItem -Path $extractPath -Filter "gh.exe" -File -Recurse |
+            Select-Object -First 1
+
+        if ($null -eq $downloadedGh) {
+            throw "Portable GitHub CLI archive did not contain gh.exe."
+        }
+
+        Copy-Item -Path $downloadedGh.FullName -Destination $portableGh -Force
+        Unblock-File -Path $portableGh -ErrorAction SilentlyContinue
+
+        if (-not (Test-Path $portableGh)) {
+            throw "Portable GitHub CLI could not be installed in the current user profile."
+        }
+
+        Write-Host "Portable GitHub CLI: $portableGh" -ForegroundColor Green
+        return $portableGh
+    }
+    finally {
+        if (Test-Path $tempRoot) {
+            Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Resolve-GitHubCli {
+    $systemGh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -ne $systemGh) {
+        return $systemGh.Source
+    }
+
+    return Install-PortableGitHubCli
+}
+
 function Invoke-GhJson {
     param([Parameter(Mandatory)][string[]]$Arguments)
 
-    $output = & gh @Arguments 2>&1
+    $output = & $script:GhPath @Arguments 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "GitHub CLI failed:`n$($output -join [Environment]::NewLine)"
     }
@@ -30,36 +139,43 @@ function Invoke-GhJson {
     return ($output -join [Environment]::NewLine) | ConvertFrom-Json
 }
 
+function Ensure-GitHubAuthentication {
+    Write-Step "Checking GitHub authentication"
+    $authOutput = & $script:GhPath auth status 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        return
+    }
+
+    Write-Host "GitHub authentication is required once for Actions artifact downloads." -ForegroundColor Yellow
+    Write-Host "A browser window will open for GitHub login. No administrator rights are required." -ForegroundColor Yellow
+
+    & $script:GhPath auth login --hostname github.com --git-protocol https --web
+    if ($LASTEXITCODE -ne 0) {
+        throw @"
+GitHub authentication did not complete successfully.
+
+Portable GitHub CLI is located at:
+  $script:GhPath
+
+You can retry manually with:
+  & "$script:GhPath" auth login --hostname github.com --git-protocol https --web
+"@
+    }
+
+    $authOutput = & $script:GhPath auth status 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitHub CLI login completed but authentication still could not be verified.`n$($authOutput -join [Environment]::NewLine)"
+    }
+}
+
 function Invoke-OutlookAlignerUpdate {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
         throw "LOCALAPPDATA is not available in this Windows session."
     }
 
-    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-        throw @"
-GitHub CLI (gh) is required but was not found.
-
-Install it once with:
-  winget install --id GitHub.cli
-
-Then close/reopen the terminal and authenticate once with:
-  gh auth login
-"@
-    }
-
-    Write-Step "Checking GitHub authentication"
-    $authOutput = & gh auth status 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw @"
-GitHub CLI is installed but is not authenticated.
-
-Run once:
-  gh auth login
-
-GitHub CLI said:
-$($authOutput -join [Environment]::NewLine)
-"@
-    }
+    $script:GhPath = Resolve-GitHubCli
+    Write-Host "Using GitHub CLI: $script:GhPath"
+    Ensure-GitHubAuthentication
 
     Write-Step "Finding latest successful UI build on '$Branch'"
     $runs = Invoke-GhJson @(
@@ -120,7 +236,7 @@ $($authOutput -join [Environment]::NewLine)
         New-Item -ItemType Directory -Path $installParent -Force | Out-Null
 
         Write-Step "Downloading artifact '$ArtifactName' from CI run $runId"
-        $downloadOutput = & gh run download $runId --repo $Repository --name $ArtifactName --dir $downloadDirectory 2>&1
+        $downloadOutput = & $script:GhPath run download $runId --repo $Repository --name $ArtifactName --dir $downloadDirectory 2>&1
         if ($LASTEXITCODE -ne 0) {
             throw "Artifact download failed:`n$($downloadOutput -join [Environment]::NewLine)"
         }
@@ -239,7 +355,8 @@ catch {
     Write-Host "-----------------------------" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
-    Write-Host "If you send me the text above, I can diagnose the updater directly." -ForegroundColor Yellow
+    Write-Host "If this is a managed work computer and company policy blocks downloaded executables, stop here rather than bypassing that policy." -ForegroundColor Yellow
+    Write-Host "Otherwise, send me the text above and I can diagnose the updater directly." -ForegroundColor Yellow
 
     if ($PauseOnError) {
         Write-Host ""
