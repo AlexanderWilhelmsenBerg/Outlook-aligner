@@ -5,6 +5,9 @@ param(
     [string]$Workflow = "CI",
     [string]$ArtifactName = "OutlookAligner-Phase3-UI-TestHarness-win-x64",
     [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA "OutlookAligner\TestApp"),
+    [string]$SigningCertificateSubject = "CN=Outlook Aligner Local Test",
+    [string]$SigningCertificateThumbprint = "",
+    [switch]$SkipLocalSigning,
     [switch]$Force,
     [switch]$NoLaunch,
     [switch]$UnblockFiles,
@@ -23,18 +26,9 @@ function Write-Step {
 
 function Get-GitHubCliArchitecture {
     $architecture = [string]$env:PROCESSOR_ARCHITECTURE
-    if ($architecture -eq "AMD64") {
-        return "amd64"
-    }
-
-    if ($architecture -eq "ARM64") {
-        return "arm64"
-    }
-
-    if ($architecture -eq "x86") {
-        return "386"
-    }
-
+    if ($architecture -eq "AMD64") { return "amd64" }
+    if ($architecture -eq "ARM64") { return "arm64" }
+    if ($architecture -eq "x86") { return "386" }
     throw "Unsupported Windows processor architecture '$architecture'."
 }
 
@@ -45,9 +39,7 @@ function Install-PortableGitHubCli {
 
     $toolsRoot = Join-Path $env:LOCALAPPDATA "OutlookAligner\Tools\GitHubCLI"
     $portableGh = Join-Path $toolsRoot "gh.exe"
-    if (Test-Path $portableGh) {
-        return $portableGh
-    }
+    if (Test-Path $portableGh) { return $portableGh }
 
     Write-Step "GitHub CLI is not installed system-wide; preparing a portable user copy"
 
@@ -56,12 +48,10 @@ function Install-PortableGitHubCli {
         New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
         New-Item -ItemType Directory -Path $toolsRoot -Force | Out-Null
 
-        # Windows PowerShell 5.1 may otherwise negotiate an obsolete TLS version.
         try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         }
         catch {
-            # PowerShell 7 does not need this and may ignore the legacy ServicePointManager path.
         }
 
         $headers = @{
@@ -121,10 +111,7 @@ function Install-PortableGitHubCli {
 
 function Resolve-GitHubCli {
     $systemGh = Get-Command gh -ErrorAction SilentlyContinue
-    if ($null -ne $systemGh) {
-        return $systemGh.Source
-    }
-
+    if ($null -ne $systemGh) { return $systemGh.Source }
     return Install-PortableGitHubCli
 }
 
@@ -142,9 +129,7 @@ function Invoke-GhJson {
 function Ensure-GitHubAuthentication {
     Write-Step "Checking GitHub authentication"
     $authOutput = & $script:GhPath auth status 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        return
-    }
+    if ($LASTEXITCODE -eq 0) { return }
 
     Write-Host "GitHub authentication is required once for Actions artifact downloads." -ForegroundColor Yellow
     Write-Host "A browser window will open for GitHub login. No administrator rights are required." -ForegroundColor Yellow
@@ -166,6 +151,107 @@ You can retry manually with:
     if ($LASTEXITCODE -ne 0) {
         throw "GitHub CLI login completed but authentication still could not be verified.`n$($authOutput -join [Environment]::NewLine)"
     }
+}
+
+function Resolve-LocalSigningCertificate {
+    if ($SkipLocalSigning) { return $null }
+
+    $certificates = Get-ChildItem Cert:\CurrentUser\My -CodeSigningCert -ErrorAction SilentlyContinue |
+        Where-Object { $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) }
+
+    if (-not [string]::IsNullOrWhiteSpace($SigningCertificateThumbprint)) {
+        $normalizedThumbprint = $SigningCertificateThumbprint.Replace(" ", "").ToUpperInvariant()
+        return $certificates |
+            Where-Object { $_.Thumbprint.Replace(" ", "").ToUpperInvariant() -eq $normalizedThumbprint } |
+            Sort-Object NotAfter -Descending |
+            Select-Object -First 1
+    }
+
+    return $certificates |
+        Where-Object { $_.Subject -eq $SigningCertificateSubject } |
+        Sort-Object NotAfter -Descending |
+        Select-Object -First 1
+}
+
+function Sign-OutlookAlignerInstall {
+    param([Parameter(Mandatory)][string]$Directory)
+
+    if ($SkipLocalSigning) {
+        Write-Host "Local test signing skipped by request."
+        return
+    }
+
+    $certificate = Resolve-LocalSigningCertificate
+    if ($null -eq $certificate) {
+        Write-Warning @"
+No local Outlook Aligner code-signing certificate was found, so this build remains unsigned.
+
+Expected certificate subject:
+  $SigningCertificateSubject
+
+The updater never creates or trusts a root certificate automatically. Create/trust the local test certificate once, then rerun the updater. Use -SkipLocalSigning to suppress this warning intentionally.
+"@
+        return
+    }
+
+    $targets = @(Get-ChildItem -Path $Directory -File |
+        Where-Object {
+            $_.Name -like "OutlookAligner.*.exe" -or
+            $_.Name -like "OutlookAligner.*.dll"
+        })
+
+    if ($targets.Count -eq 0) {
+        throw "No Outlook Aligner executables or libraries were found to sign in '$Directory'."
+    }
+
+    Write-Step "Signing Outlook Aligner binaries with the local test certificate"
+    Write-Host "Certificate: $($certificate.Subject)"
+    Write-Host "Thumbprint: $($certificate.Thumbprint)"
+
+    foreach ($target in $targets) {
+        Unblock-File -Path $target.FullName -ErrorAction SilentlyContinue
+
+        $currentSignature = Get-AuthenticodeSignature -FilePath $target.FullName
+        $alreadySigned = (
+            $currentSignature.Status -eq [System.Management.Automation.SignatureStatus]::Valid -and
+            $null -ne $currentSignature.SignerCertificate -and
+            $currentSignature.SignerCertificate.Thumbprint -eq $certificate.Thumbprint
+        )
+
+        if (-not $alreadySigned) {
+            [void](Set-AuthenticodeSignature `
+                -FilePath $target.FullName `
+                -Certificate $certificate `
+                -HashAlgorithm SHA256)
+        }
+
+        $verified = Get-AuthenticodeSignature -FilePath $target.FullName
+        if ($verified.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            throw @"
+Local signing did not verify as Valid for:
+  $($target.FullName)
+
+Signature status:
+  $($verified.Status)
+
+The certificate exists in CurrentUser\My but Windows does not currently trust the resulting signature. Ensure the public certificate is trusted in the current user's Root and TrustedPublisher stores, or rerun with -SkipLocalSigning if local signing is intentionally unavailable.
+"@
+        }
+
+        Write-Host "Signed: $($target.Name) [$($verified.Status)]" -ForegroundColor Green
+    }
+}
+
+function Complete-InstalledBuild {
+    param([Parameter(Mandatory)][string]$Directory)
+
+    if ($UnblockFiles) {
+        Write-Step "Removing downloaded-file zone markers"
+        Get-ChildItem -Path $Directory -File -Recurse |
+            Unblock-File -ErrorAction SilentlyContinue
+    }
+
+    Sign-OutlookAlignerInstall -Directory $Directory
 }
 
 function Invoke-OutlookAlignerUpdate {
@@ -209,6 +295,7 @@ function Invoke-OutlookAlignerUpdate {
             $installComplete = (Test-Path $existingApp) -and (Test-Path $existingHost)
             if ($sameBuild -and $installComplete) {
                 Write-Host "Already current: CI run $runId ($($headSha.Substring(0, [Math]::Min(12, $headSha.Length))))." -ForegroundColor Green
+                Complete-InstalledBuild -Directory $InstallDirectory
                 if (-not $NoLaunch) {
                     Write-Step "Launching Outlook Aligner"
                     Start-Process -FilePath $existingApp
@@ -317,10 +404,7 @@ function Invoke-OutlookAlignerUpdate {
             throw
         }
 
-        if ($UnblockFiles) {
-            Write-Step "Removing downloaded-file zone markers"
-            Get-ChildItem -Path $InstallDirectory -File -Recurse | Unblock-File -ErrorAction SilentlyContinue
-        }
+        Complete-InstalledBuild -Directory $InstallDirectory
 
         $shortSha = $headSha.Substring(0, [Math]::Min(12, $headSha.Length))
         Write-Host "Updated Outlook Aligner to CI run $runId ($shortSha)." -ForegroundColor Green
