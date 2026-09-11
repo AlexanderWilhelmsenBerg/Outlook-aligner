@@ -10,9 +10,9 @@ namespace OutlookAligner.OutlookHost.Tests;
 public sealed class BootstrapTests
 {
     [Fact]
-    public void ProtocolVersionStartsAtOne()
+    public void ProtocolVersionReflectsMeetingStatusContract()
     {
-        Assert.Equal(1, OutlookHostProtocol.Version);
+        Assert.Equal(3, OutlookHostProtocol.Version);
     }
 
     [Fact]
@@ -146,6 +146,7 @@ public sealed class BootstrapTests
         Assert.DoesNotContain("Sensitive location", json, StringComparison.Ordinal);
         Assert.Contains("\"Subject\": null", json, StringComparison.Ordinal);
         Assert.Contains("\"Location\": null", json, StringComparison.Ordinal);
+        Assert.Contains("\"MeetingStatus\": \"olMeetingReceived\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -157,6 +158,7 @@ public sealed class BootstrapTests
 
         Assert.Contains("Expected subject", json, StringComparison.Ordinal);
         Assert.Contains("Expected location", json, StringComparison.Ordinal);
+        Assert.Contains("\"MeetingStatus\": \"olMeetingReceived\"", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -183,6 +185,7 @@ public sealed class BootstrapTests
             IsAllDay: false,
             IsRecurring: false,
             RecurrenceState: "olApptNotRecurring",
+            MeetingStatus: "olMeetingReceived",
             BusyStatus: "olBusy",
             Sensitivity: "olNormal",
             Subject: subject,
@@ -201,7 +204,7 @@ public sealed class BootstrapTests
             Error: null);
 
         return new OutlookProbeResult(
-            ProtocolVersion: 1,
+            ProtocolVersion: OutlookHostProtocol.Version,
             CapturedAtUtc: new DateTime(2026, 9, 7, 7, 0, 0, DateTimeKind.Utc),
             WindowStartLocal: start.Date,
             WindowEndLocal: start.Date.AddDays(90),

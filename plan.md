@@ -1,57 +1,235 @@
 # Outlook Aligner — Implementation Plan
 
-Status: **Phase 0 complete ✅. Phase 1 complete ✅ and merged. Phase 2 native-forwarding mechanism proven end-to-end; reliability matrix in progress 🚧 on PR #5.**
+Status: **Technical foundation established. The product roadmap now prioritizes a complete read-only overview experience before any reconciliation/write workflows. Segment A is the active roadmap.**
 
-Last reviewed: 2026-09-08
+Last reviewed: 2026-09-11
 
-## 1. Goal
+## 1. Product goal
 
-Build a **Windows desktop application with a real graphical user interface** that uses the Classic Outlook COM/Object Model as its only Outlook integration boundary. It discovers the calendar-capable accounts already configured in one Outlook profile, reads their calendars for a configurable future horizon, correlates the same logical meeting across accounts, shows differences clearly, and lets the user deliberately align them.
+Build a Windows desktop application that uses the **Classic Outlook COM/Object Model** as its Outlook integration boundary, discovers the calendar-capable accounts already configured in one Outlook profile, reads their calendars, correlates the same logical event across accounts, and gives the user a clear visual overview of what is aligned, missing, moved, or otherwise inconsistent.
 
-Microsoft Graph is explicitly out of scope. The design must not require Azure app registration, Graph delegated permissions, tenant administrator consent, or separate Outlook credentials.
+The product is intentionally split into two major stages:
 
-The command-line programs used in early phases are **diagnostic and acceptance-test harnesses only**. They are not the shipped product and do not satisfy the v1 UI requirement.
+- **Segment A — Read-only overview:** make the application genuinely useful without changing Outlook data.
+- **Segment B — Reconciliation:** add deliberate Forward/Copy/Move actions only after the read model and visual comparison experience are trustworthy.
 
-## 2. Confirmed product requirements
+Microsoft Graph, MSAL, Azure app registration, tenant consent, and separate Outlook credentials are out of scope.
 
-### User interface — required for v1
+### PR sizing rule
 
-- Outlook Aligner ships as a **WinUI 3 desktop application**.
-- A functional GUI is a v1 acceptance criterion, not an optional later enhancement.
-- The main app uses a persistent navigation shell with four primary views:
-  1. **Calendar**
-  2. **Alignment**
-  3. **Settings**
-  4. **Diagnostics**
-- Calendar is the primary/home view.
-- The UI must expose account discovery, refresh, scan horizon, event comparison, authority, status, and supported alignment actions without requiring CLI use.
-- All write actions must clearly identify source/target account and intended effect before execution.
-- Bulk writes require an immutable preview and explicit confirmation.
-- The UI must show partial failures instead of hiding them or aborting the whole operation.
-- Normal UI must not expose raw StoreIDs, EntryIDs, GlobalAppointmentIDs, HRESULTs, or internal metadata; those belong in Diagnostics.
-- Support keyboard navigation, high-DPI scaling, light/dark theme, and accessible labels/automation properties.
-- UI code never receives COM objects. It communicates with `OutlookAligner.OutlookHost` through plain DTOs/local IPC.
-- Detailed UI contract: [`docs/ui.md`](docs/ui.md).
+Roadmap phases are product slices, not mandatory PR sizes. Use the smallest coherent PR that can be independently reviewed and tested. Never merge a PR automatically; merge only after explicit owner approval.
 
-### Outlook environment
+## 2. Technical foundation already completed
 
-- Windows desktop application.
-- Classic Outlook for Windows is required.
-- The three target accounts are configured in the same Outlook profile.
-- Accounts/calendars are discovered automatically through Outlook COM.
-- New Outlook is out of scope because it does not expose the required Classic Outlook Object Model automation surface.
-- Outlook Aligner stores no Outlook passwords or access tokens.
+The following work predates the Segment A/B product roadmap and remains valid foundation rather than being discarded.
 
-### Calendar scan
+### Foundation 0 — repository/toolchain bootstrap ✅
 
-- Scan starts at today.
-- Future horizon is configurable; default 90 days.
-- Recurrences must be expanded only inside the bounded horizon.
-- Refresh is user-driven in v1.
-- One failed calendar/item must not abort the entire scan.
-- The overlap window is half-open: `eventEnd > windowStart && eventStart < windowEnd`.
+- .NET 10 / C# 14 solution and CI.
+- WinUI 3 / Windows App SDK.
+- Outlook interop packaging.
+- TypeScript/Vite calendar frontend foundation.
+- tests, coverage, vulnerability audit, artifacts.
 
-### Logical event states
+### Foundation 1 — Classic Outlook read boundary ✅
+
+Merged in PR #4.
+
+Proved:
+
+- account/store/default Calendar discovery;
+- bounded calendar scanning;
+- recurrence-safe enumeration inside a time horizon;
+- StoreID + EntryID locator handling;
+- GlobalAppointmentID reads;
+- partial-failure behavior;
+- packaged real-machine execution.
+
+### Foundation 2 — native Forward technical spike ✅
+
+Merged in PR #5.
+
+A genuine Outlook native Forward route was proven end-to-end on a real accepted meeting. That code remains useful for Segment B, but **Forward is no longer a prerequisite for completing Segment A** and broad Forward testing is deliberately deferred until the read-only product is complete.
+
+### Foundation 3 — WinUI/read-alignment shell ✅ pending PR #6 merge
+
+PR #6 provides the first usable desktop shell:
+
+- WinUI app and NavigationView;
+- Calendar, Alignment, Settings and Diagnostics destinations;
+- GUI-driven Outlook account/calendar discovery;
+- structured persistent diagnostics;
+- preliminary non-recurring correlation;
+- read-only managed-copy metadata inspection;
+- authority selection/preview scaffolding;
+- safe Forward capability/prepare diagnostics with no GUI send;
+- self-contained CI test bundle and local updater.
+
+The owner has validated that this build launches and satisfies the initial read use case. Forward/reconciliation behavior is **not** a merge gate for this foundation PR.
+
+## 3. Segment A — Read-only overview
+
+Segment A is complete only when Outlook Aligner is useful as a read-only cross-account calendar overview application. No Forward, Copy, Move, delete, or other persistent Outlook mutation is required to close Segment A.
+
+### Segment A Phase 1 — Month calendar view
+
+Create the main production calendar surface.
+
+Requirements:
+
+- Calendar defaults to a conventional **month view**.
+- Show one logical event once, rather than rendering a separate duplicate row/card for every account copy.
+- Date navigation and **Today** control.
+- Keep the bounded Outlook refresh model and current scan horizon.
+- Selecting a calendar event opens its read-only comparison/detail information.
+- Calendar must remain usable with more than three configured accounts even though the initial real profile has three.
+- FullCalendar/WebView2 may be used as planned; if used, generate a real Node 24 lockfile and switch CI to `npm ci`. Never fabricate a lockfile.
+
+Acceptance:
+
+- A user can open Outlook Aligner and understand the month schedule without using raw IDs, PowerShell, or Diagnostics.
+- A logical event occupies one visual calendar item even when copies exist in multiple accounts.
+
+### Segment A Phase 2 — Account markers and alignment color coding
+
+Add visual cross-account state directly to every calendar event.
+
+#### Account-presence markers
+
+Each logical event shows small account markers in the **top-left corner** of the event.
+
+- One dot/marker per account in which that logical event is present.
+- Each account has a stable visual identity in the account legend/settings.
+- Marker design must scale beyond A/B/C; do not hard-code exactly three visual slots.
+- Color alone must not be the only accessible representation; marker tooltip/accessible text names the account(s).
+
+#### Event status color
+
+The event body/background represents the logical alignment state across the active accounts:
+
+- **Green:** present in all active accounts and times agree with the authoritative occurrence.
+- **Yellow:** present in at least two accounts but not all active accounts, **or** at least one observed copy is moved/time-shifted from the authoritative occurrence.
+- **Red:** present in only one active account.
+
+For N accounts this generalizes as:
+
+- 1 of N = red;
+- 2 through N-1 of N = yellow;
+- N of N = green only when the relevant times are aligned;
+- any moved/time disagreement overrides green to yellow.
+
+Conflict/duplicate/unresolved states must have an additional symbol/text treatment so they are not misleadingly reduced to green/yellow/red.
+
+Acceptance:
+
+- The user can scan the month view and immediately see which events are healthy, incomplete, or isolated.
+- Account membership and alignment state are represented independently: account dots answer **where is it?**, event color answers **how healthy is the cross-account state?**
+
+### Segment A Phase 3 — Recurring meetings in the read model
+
+Make recurring events first-class in the read-only experience.
+
+Requirements:
+
+- Correctly represent series masters, ordinary occurrences, and modified/moved exceptions inside the bounded scan horizon.
+- Preserve logical occurrence identity when a recurring occurrence moves.
+- Do not correlate unrelated occurrences merely because they share a series GlobalAppointmentID.
+- Calendar events that belong to a recurring series show a **recurrence symbol in the lower-right corner**.
+- The symbol is informational/read-only in Segment A.
+- Deleted occurrence diagnosis may be displayed, but Segment A never deletes or recreates anything.
+
+Acceptance:
+
+- Recurring meetings no longer fall into a generic unresolved bucket during normal supported cases.
+- A moved exception stays associated with the correct logical occurrence.
+- The calendar clearly marks recurring items without cluttering account/status markers.
+
+### Segment A Phase 4 — Reconciliation report view (read-only)
+
+Add a new report focused on discrepancies. Despite the name, this phase **does not perform reconciliation**; it reports what would need attention.
+
+The report must include at least:
+
+- **Moved:** one or more accounts have a different Start/End from the event authority.
+- **Missing:** event is absent from one or more active accounts.
+- **Single-account:** useful red-state subset of Missing.
+- **Duplicate:** multiple candidate copies exist in the same account.
+- **Conflict / unresolved:** identity or authority cannot be determined safely.
+
+Each report row shows:
+
+- subject;
+- authoritative/origin account when known;
+- account-presence markers;
+- authoritative time;
+- per-account observed time where different;
+- missing account names;
+- recurrence indicator;
+- clear reason/status.
+
+Selecting a report row selects/opens the same logical event detail model used by Calendar. Calendar and Report must not invent separate correlation logic.
+
+Acceptance:
+
+- The user can answer “what needs attention?” without manually comparing calendars.
+- No report action mutates Outlook in Segment A.
+
+### Segment A Phase 5 — Filters and view modes
+
+Finish the read-only overview workflow by allowing the user to focus the Calendar and Report surfaces.
+
+Required view modes:
+
+- **Calendar only**
+- **Report only**
+- **Calendar + Report** combined/split view where practical
+
+Required status filters include:
+
+- All
+- Aligned
+- Missing
+- Moved
+- Duplicate
+- Conflict / unresolved
+
+Also support account filters so the user can include/exclude configured calendars from the current comparison where useful.
+
+Filter behavior must be shared between Calendar and Report: if the user asks to show only Moved, both surfaces should reflect that same logical result set unless a view explicitly documents otherwise.
+
+Acceptance:
+
+- User can switch between broad overview and discrepancy-focused inspection without rescanning Outlook.
+- Filter state changes presentation only; it does not change Outlook data or silently redefine stored identity.
+
+## 4. Segment A authority/origin model
+
+Authority is **event-specific**, never globally tied to Account A/B/C.
+
+Examples:
+
+- If logical Event 1 originates/arrives first through Account A and that origin can be established reliably, Account A is authoritative for Event 1.
+- If Event 2 originates/arrives through Account B, Account B is authoritative for Event 2.
+- Account C may be authoritative for a different event.
+
+There is no permanent “master calendar” unless the user explicitly introduces such a preference later.
+
+Authority reasons remain explicit:
+
+- `KnownOrigin`
+- `UserSelected`
+- `Inferred`
+- `Unknown`
+
+Important safety rule: **scan order is not origin evidence**. Outlook Aligner must not call whichever account happened to be enumerated first authoritative. Reliable native/provenance evidence may establish origin; otherwise the event remains Unknown or the user selects authority.
+
+`LastModificationTime` must never become a latest-wins authority rule.
+
+In Segment A, authority is used only to explain comparison state and determine what counts as “moved”; it does not authorize a write.
+
+## 5. Logical event/read-state model
+
+Primary states remain:
 
 - `Aligned`
 - `Missing`
@@ -60,147 +238,116 @@ The command-line programs used in early phases are **diagnostic and acceptance-t
 - `Duplicate`
 - `Conflict`
 - `Ignored`
-- `DeletedOrMissing` for diagnosis only; v1 never automatically deletes.
+- `DeletedOrMissing` for diagnosis only
 
-### Transfer actions
+Temporary implementation safety states such as `RecurrenceIdentityUnresolved` and `Uncorrelated` may remain while Segment A phases are being built, but supported ordinary and recurring cases should progressively leave those buckets.
 
-#### Forward meeting
+### Identity rules
 
-Phase 2 has proven a genuine Classic Outlook forwarding route for an accepted Calendar meeting on the user's real profile.
+- `StoreID + EntryID` is a locator cache, not stable logical identity.
+- `GlobalAppointmentID` is the primary native correlation candidate for ordinary non-recurring Outlook meetings.
+- Managed copies may use validated Outlook Aligner provenance metadata.
+- Recurrence requires occurrence/exception identity; series GlobalAppointmentID alone is insufficient.
+- Suspicious or unreadable managed metadata fails closed into Conflict/unresolved behavior.
 
-Primary production mechanism:
+## 6. Segment A exit gate
 
-1. reopen the exact accepted Calendar `AppointmentItem` in the selected source Store;
-2. verify event identity (`StoreID + EntryID` locator plus `GlobalAppointmentID`) and meeting state;
-3. query Outlook's built-in `Forward` command and require it to be valid, visible, and enabled;
-4. invoke Outlook's native Calendar Forward command;
-5. capture the native `MeetingItem` supplied by `AppointmentItem.Forward`;
-6. require zero pre-existing recipients;
-7. add/resolve only the explicitly intended target account(s) permitted by the product action;
-8. pin `SendUsingAccount` to the selected source Outlook account;
-9. send only after the GUI's explicit user confirmation and all capability/safety checks pass.
+Do not begin Segment B implementation merely because underlying Forward code already exists. Segment A closes when the owner can use the application as a reliable read-only daily overview.
 
-The real-machine Phase 2 spike proved this path end-to-end on an accepted Kverneland meeting forwarded to a user-controlled Knowit account. The target received the forwarded meeting.
+Required exit criteria:
 
-`AppointmentItem.ForwardAsVcal()` is not equivalent and must never be silently presented as native forwarding.
+- app launches normally from the test/release package;
+- configured Classic Outlook accounts are discovered automatically;
+- month calendar is the primary usable view;
+- logical events render once with account-presence markers;
+- green/yellow/red status behaves correctly for N active accounts;
+- event-specific authority is visible and explainable;
+- recurring events and moved exceptions are represented correctly for supported cases;
+- recurrence symbol appears in the lower-right of recurring events;
+- read-only reconciliation report shows Missing/Moved/Duplicate/Conflict cases;
+- Calendar only / Report only / combined view modes work;
+- status/account filters work consistently;
+- partial account/item failures remain visible;
+- Diagnostics remains available without raw technical IDs leaking into normal UI;
+- normal use requires no PowerShell/manual Outlook IDs;
+- no Segment A action persistently changes Outlook calendar data;
+- user has manually accepted the read-only workflow on the real Classic Outlook profile.
 
-The older retained-`MeetingItem` recovery path is not a prerequisite for production Forward because real testing showed accepted meetings may no longer have a recoverable request in Inbox/Deleted Items. It may remain as a secondary path only if Phase 2 closeout finds a clear benefit worth the extra complexity.
+## 7. Segment B — Reconciliation
 
-The GUI treats Forward as a **per-event capability**. If Outlook reports native Forward unavailable, the action must be disabled/hidden with a clear reason and must not fall back to fake ICS forwarding.
+Only after Segment A is accepted, add controlled mutations. Segment B reuses the exact same logical-event, authority, recurrence, report, and filter model rather than creating a second reconciliation engine.
 
-#### Copy Full
+Proposed order:
 
-Create an Outlook Aligner-managed calendar copy containing the supported full details required by the product: subject, time, all-day state, location, body, online-meeting link where available, reminder settings, busy state, sensitivity, and supported recurrence data.
+### Segment B Phase 1 — action planning and immutable previews
 
-A copied item is a managed local copy; it must not be described as making the target account an attendee of the organizer's original meeting.
+- Turn read-only discrepancy rows into explicit candidate action plans.
+- Source, authority, target, old state and intended new state visible before execution.
+- Unsupported/conflict/unknown cases remain blocked.
 
-#### Copy Busy
+### Segment B Phase 2 — Forward selected
 
-Create a privacy-preserving managed placeholder containing time/all-day/busy state and optionally a generic `Busy` subject. By default it must not copy body, attendees, Teams link, or location.
+- Productize the already-proven native Outlook Forward mechanism.
+- Revalidate exact event capability before send.
+- Explicit target and confirmation.
+- No vCalendar/ICS fallback masquerading as native Forward.
 
-### Move actions and authority
+### Segment B Phase 3 — Copy Full / Copy Busy
 
-Each logical event has an authoritative account. Normal rule: `AuthorityAccount = OriginAccount`.
+- Create Aligner-managed copies with durable provenance.
+- Full and privacy-preserving Busy modes remain semantically distinct.
 
-Authority reason is recorded as:
+### Segment B Phase 4 — Move Selected
 
-- `KnownOrigin`
-- `UserSelected`
-- `Inferred`
-- `Unknown`
+- Align non-authoritative managed copies to authoritative Start/End.
+- Never mutate the authoritative original as part of Move.
 
-`Move selected` updates only non-authoritative managed/local copies to authoritative Start/End. The authoritative original is untouched.
+### Segment B Phase 5 — bulk reconciliation
 
-`Move all` builds a preview first and excludes conflicts, unknown authority, ignored events, unsupported recurrence mutations, and failed safety checks.
+- Preview-first multi-event actions.
+- Immutable plan, explicit confirmation, per-item result/history.
+- Conflicts and unsupported recurrence excluded safely.
 
-`LastModificationTime` must never become an implicit latest-wins authority rule.
+### Segment B Phase 6 — recurring writes
 
-### Deletion
+- Only after recurring read identity is proven by Segment A Phase 3.
+- Explicit occurrence-vs-series semantics.
 
-Deletion synchronization is explicitly excluded from v1. Missing data is never interpreted as permission to delete another calendar's item.
+Deletion synchronization remains out of scope for v1 unless deliberately added in a later roadmap decision.
 
-## 3. Event identity model
+## 8. Architecture
 
-### EntryID is a locator, not identity
+Chosen stack remains:
 
-Store `StoreID + EntryID` only as the current Outlook locator cache. EntryID may change after moves or other Outlook operations.
+- C# 14 / .NET 10 LTS
+- WinUI 3 / Windows App SDK
+- WebView2 + FullCalendar Vanilla
+- TypeScript + Vite
+- SQLite via Microsoft.Data.Sqlite + Dapper
+- CommunityToolkit.Mvvm
+- Microsoft.Extensions hosting/config/logging + Serilog
+- xUnit v3 / Microsoft Testing Platform
+- BenchmarkDotNet
+- GitHub Actions + Dependabot
 
-### Primary native correlation
-
-Use Outlook `GlobalAppointmentID` as the primary native meeting-correlation candidate.
-
-### Outlook Aligner-managed identity
-
-Managed copies use custom properties such as:
-
-- `OutlookAligner.SyncGroupId`
-- `OutlookAligner.SourceGlobalAppointmentId`
-- `OutlookAligner.SourceAccountId`
-- `OutlookAligner.CopyType`
-- `OutlookAligner.SchemaVersion`
-
-Do not assume custom properties propagate through true meeting forwarding.
-
-### Recurrence
-
-Series masters, normal occurrences, modified exceptions, and deleted occurrences require separate identity handling. A moved occurrence must remain associated with its original occurrence rather than becoming an unrelated standalone event.
-
-## 4. Architecture
-
-### Chosen stack
-
-- C# 14 / .NET 10 LTS.
-- WinUI 3 / Windows App SDK for the production desktop UI.
-- WebView2 + FullCalendar Vanilla for calendar visualization.
-- TypeScript + Vite for calendar assets.
-- SQLite via Microsoft.Data.Sqlite + Dapper.
-- CommunityToolkit.Mvvm.
-- Microsoft.Extensions.Hosting/configuration/logging + Serilog.
-- xUnit v3 on Microsoft Testing Platform.
-- `Microsoft.Testing.Extensions.CodeCoverage` for MTP-native coverage.
-- NSubstitute only when a handwritten fake is not clearer.
-- BenchmarkDotNet.
-- GitHub Actions + Dependabot.
-
-Microsoft Graph and MSAL are not dependencies.
-
-### Process model
+Process boundary:
 
 ```text
 OutlookAligner.App.exe
-  WinUI 3 / NavigationView / MVVM / alignment engine / SQLite / WebView2
+  WinUI / presentation / correlation read model / local persistence
         |
-        | local IPC
+        | versioned local transport
         v
 OutlookAligner.OutlookHost.exe
-  interactive user process
-  STA entry thread
+  interactive STA process
   Classic Outlook COM/Object Model
 ```
 
-The Outlook host is not a Windows service.
+COM never enters UI/Core DTOs. OutlookHost remains an interactive user process, never a Windows Service. The current child-process/stdout transport is transitional; production write workflows should move to the planned versioned local IPC/named-pipe boundary without coupling the read model to transport details.
 
-### UI/host boundary invariants
+## 9. Local persistence
 
-- `OutlookAligner.App` owns presentation, view state, confirmation flows, and user interaction.
-- `OutlookAligner.OutlookHost` owns all Outlook COM access.
-- COM objects never cross IPC or enter Core/UI DTOs.
-- IPC contracts are versioned plain DTOs.
-- A UI crash must not leave a hidden Outlook write operation running.
-- The app must remain usable for read-only inspection when a write capability is unavailable.
-
-### COM boundary invariants
-
-- Convert Outlook objects immediately to plain DTOs.
-- Keep Outlook automation on an STA thread.
-- Never pass COM RCWs over IPC.
-- Release COM objects deterministically, especially recurrence objects and collection enumerators.
-- Do not call `Application.Quit()` merely because Outlook Aligner attached to or started Outlook.
-- Catch/report one item or folder failure without aborting the whole scan where safe.
-
-## 5. Persistence
-
-Planned local SQLite tables:
+Planned tables remain:
 
 - `Accounts`
 - `SyncGroups`
@@ -209,112 +356,26 @@ Planned local SQLite tables:
 - `OperationHistory`
 - `SchemaMigrations`
 
+Segment A may introduce persistence needed for display preferences, filters, account identities/order, and user-selected authority. It must not require write-operation history until Segment B.
+
 No Outlook passwords or tokens are stored.
 
-## 6. Phase roadmap
+## 10. Global safety rules
 
-### Phase 0 — repository/toolchain bootstrap ✅
-
-Complete.
-
-### Phase 1 — Outlook COM discovery/read probe ✅
-
-Complete and merged in PR #4. Proved real Classic Outlook account/store/calendar discovery, bounded recurrence-safe reads, privacy defaults, packaged Outlook interop, and production-machine execution.
-
-### Phase 2 — native meeting-forwarding technical spike 🚧
-
-End-to-end Calendar-command mechanism is proven on a real accepted meeting:
-
-- native Forward capability detected on Calendar `AppointmentItem`;
-- native `MeetingItem` produced by Outlook's Forward event;
-- cancellation/prepare behavior proven;
-- exact recipient preparation and `SendUsingAccount` pinning proven;
-- explicitly confirmed `MeetingItem.Send()` completed;
-- forwarded meeting arrived in another user-controlled Outlook account;
-- no vCalendar fallback used.
-
-Remaining closeout is a small reliability matrix for recurrence/Teams behavior, another source account, and forwarding-disabled behavior if a suitable event is readily available. Then decide whether the retained-request Path A should be kept or removed/simplified.
-
-### Phase 3 — identity prototype
-
-Prove correlation and recurrence identity independently of the production UI:
-
-- GlobalAppointmentID behavior across the three accounts;
-- series master vs occurrence vs exception identity;
-- moved occurrence handling;
-- managed-copy custom-property schema;
-- authority/origin confidence model.
-
-### Phase 4 — production read-only WinUI UI
-
-Build the real application shell and read-only product experience specified in [`docs/ui.md`](docs/ui.md):
-
-- `App.xaml` and `MainWindow`;
-- NavigationView shell;
-- Calendar, Alignment, Settings, Diagnostics pages;
-- MVVM and IPC wiring;
-- FullCalendar/WebView2 integration;
-- account discovery and refresh;
-- comparison/detail pane;
-- loading/error/partial-failure states;
-- keyboard, high-DPI, theme and accessibility requirements.
-
-Phase 4 is not satisfied by the diagnostic CLI.
-
-### Phase 5 — Copy Full
-
-Implement managed full-detail copies with identity properties and operation history.
-
-### Phase 6 — Copy Busy
-
-Implement privacy placeholders and associated UI/preview.
-
-### Phase 7 — Move Selected
-
-Allow deliberate time alignment of managed non-authoritative copies only.
-
-### Phase 8 — Move All
-
-Preview-first batch movement with conflict/unsupported exclusions and immutable execution plan.
-
-### Phase 9 — recurring writes
-
-Only after recurrence identity is proven, add supported recurring Copy/Move operations with explicit unsupported-case handling.
-
-### Phase 10 — hardening/release
-
-- packaging/installer;
-- upgrade/migration tests;
-- crash-safe operation history;
-- diagnostics/export;
-- accessibility and DPI verification;
-- performance limits;
-- documentation and release checklist.
-
-## 7. Global safety rules
-
-- Never merge a PR automatically; merge only after explicit user approval.
-- Never silently fall back from native Forward to vCalendar/ICS.
+- Never merge a PR automatically.
+- Segment A is read-only: do not introduce Outlook mutation merely to make testing easier.
 - Never infer deletion permission from a missing event.
-- Never mutate the authoritative original as part of Move selected/all.
-- Never use `LastModificationTime` as automatic authority.
-- Never leak meeting body/attendees/online links into ordinary diagnostics.
-- All production write actions require explicit user intent, capability checks, and operation history.
+- Never use scan order or `LastModificationTime` as automatic authority.
+- Invalid/unreadable managed metadata fails closed.
+- Never leak body/attendees/online links into ordinary diagnostics.
+- Keep account identity and alignment status visually distinct.
+- Do not rely on color alone for accessibility.
+- Segment B writes require explicit user intent, capability checks, preview where relevant, and operation history.
 - Bulk writes require preview + confirmation.
+- Never silently fall back from native Forward to vCalendar/ICS.
 
-## 8. V1 acceptance gate
+## 11. V1 direction
 
-V1 is not complete until all of the following are true:
+The immediate release milestone is **Segment A complete: useful read-only Outlook Aligner**.
 
-- packaged WinUI 3 desktop GUI exists and launches normally;
-- Calendar/Alignment/Settings/Diagnostics are functional;
-- no normal workflow requires CLI/PowerShell;
-- all three configured Outlook accounts are discoverable;
-- bounded calendar scanning/correlation works;
-- Forward/Copy/Move actions truthfully represent their semantics;
-- Forward is enabled only when native Outlook capability checks pass;
-- authority/conflict behavior is visible before writes;
-- no deletion sync exists;
-- operation history/diagnostics exist;
-- tests, packaging and migration checks pass;
-- user has manually tested the release candidate on the real Classic Outlook profile.
+A later reconciliation-capable v1 can add Segment B incrementally after the read-only product is trusted on the real profile.
