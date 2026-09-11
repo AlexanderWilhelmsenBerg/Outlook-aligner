@@ -1,116 +1,134 @@
 # Outlook Aligner
 
-Outlook Aligner is a **WinUI 3 Windows desktop application** for comparing and deliberately aligning calendar events across multiple accounts in one Classic Outlook profile.
+Outlook Aligner is a **WinUI 3 Windows desktop application** for comparing calendar events across multiple accounts in one Classic Outlook profile, first as a complete read-only overview and later as a deliberate reconciliation tool.
 
-The command-line tools used in the early technical phases are diagnostic/test harnesses only. Normal product use is moving into the WinUI application shell; see [`docs/ui.md`](docs/ui.md).
+The integration boundary is the **Classic Outlook COM/Object Model**. Microsoft Graph/MSAL/Azure app registration are deliberately out of scope.
 
-## Integration boundary
+## Current product direction
 
-The project uses the Classic Outlook COM/Object Model. Microsoft Graph and MSAL are deliberately out of scope; no Azure app registration, Graph permission, or tenant administrator consent is required by the design.
+Technical foundations are already in place for Outlook discovery, bounded calendar reads, native Forward experimentation, a WinUI shell, preliminary correlation, diagnostics, and packaged test builds.
 
-## Project status
+The active roadmap is now split into two segments:
 
-- **Phase 0 — Repository/toolchain bootstrap: Complete ✅**
-- **Phase 1 — Outlook COM discovery/read probe: Complete ✅ / merged in PR #4**
-- **Phase 2 — Native meeting forwarding: Complete ✅ / merged in PR #5**
-- **Phase 3 — WinUI read/alignment foundation: In progress 🚧**
+- **Segment A — Read-only overview**: finish a genuinely useful calendar/report product before testing or productizing reconciliation writes.
+- **Segment B — Reconciliation**: add Forward/Copy/Move only after Segment A is accepted.
 
-Phase 0 was the one-time bootstrap authorized directly on `main`. Every implementation change from Phase 1 onward is delivered through a pull request and is not merged automatically.
+See [`plan.md`](plan.md) for the full roadmap and [`docs/ui.md`](docs/ui.md) for the UI contract.
 
-Phase 1 proved the packaged Classic Outlook COM read boundary on the user's real Windows/Outlook profile, including the self-contained interop packaging fix discovered during manual testing. See [`docs/phase-1.md`](docs/phase-1.md).
+### Segment A phases
 
-Phase 2 proved genuine Classic Outlook native forwarding for accepted Calendar meetings through Outlook's built-in Forward command and was merged in PR #5. The product does not silently substitute `ForwardAsVcal()`/ICS. See [`docs/phase-2.md`](docs/phase-2.md).
+1. **Month calendar view** — one visual event per logical event.
+2. **Account markers + status colors** — account dots top-left; green/all aligned, yellow/partial or moved, red/single-account.
+3. **Recurring meetings** — occurrence/exception identity plus recurrence symbol lower-right.
+4. **Read-only reconciliation report** — Missing, Moved, Duplicate, Conflict/unresolved.
+5. **Filters and view modes** — Calendar only, Report only, combined, plus status/account filters.
 
-## Current Phase 3 increment
+Authority is event-specific rather than tied to one permanent master account. If one event reliably originates through Account A, A can be authoritative for that event; another event can be authoritative from B or C. Scan order and LastModificationTime are not authority evidence.
 
-The current `phase-3/ui-assisted-testing` branch intentionally stops at a **read-only alignment foundation plus safe Forward preparation** rather than trying to finish the entire phase in one PR.
+## Current PR #6 foundation
 
-It currently provides:
+The current `phase-3/ui-assisted-testing` branch provides:
 
-- a real unpackaged WinUI 3 `App.xaml` / `MainWindow` application;
-- NavigationView destinations for Calendar, Alignment, Settings and Diagnostics;
-- automatic OutlookHost launch and protocol-version validation;
-- bounded account/calendar discovery from the GUI;
-- selected-event native Forward capability checks;
-- **Prepare Forward (discard)** using the proven native Outlook forwarding path, with no send action in this increment;
-- preliminary logical-event correlation for non-recurring events;
-- explicit `Aligned`, `Missing`, `Moved`, `DetailsDifferent`, `Duplicate`, `Conflict`, recurrence-unresolved and uncorrelated states;
-- read-only Outlook Aligner managed-copy metadata detection;
-- fail-closed handling of incomplete, unsupported or unreadable managed-copy metadata;
-- `KnownOrigin` authority inference only from internally consistent validated managed-copy provenance;
-- session-only user authority selection when origin is not known;
-- a **preview-only Move Selected plan** that can target validated managed copies but cannot execute Outlook writes;
-- a self-contained Windows CI artifact containing the UI and OutlookHost.
+- real WinUI 3 application shell;
+- Calendar, Alignment, Settings and Diagnostics destinations;
+- GUI-driven account/calendar discovery;
+- bounded Outlook reads;
+- preliminary non-recurring logical grouping;
+- read-only managed-copy metadata classification;
+- authority/Move-preview scaffolding with no Move execution;
+- structured persistent diagnostics log;
+- safe Forward capability/prepare diagnostics with no GUI send;
+- self-contained Windows CI test bundle;
+- one-command local updater.
 
-Recurring events remain deliberately unresolved for identity/correlation. Copy writes, Move writes, real Forward send from the GUI, persistence, operation history and production IPC are not part of this increment.
-
-## Production UI direction
-
-The v1 GUI uses a WinUI 3 `NavigationView` shell with:
-
-- **Calendar** — primary multi-account calendar and event selection;
-- **Alignment** — discrepancy queue, authority and safe previews/actions;
-- **Settings** — horizon, privacy and UI preferences;
-- **Diagnostics** — Outlook/host health, operation history and technical identifiers.
-
-Normal v1 operation must not require PowerShell or CLI arguments. Write actions are capability-driven, and bulk writes require preview + explicit confirmation. The detailed UI/UX contract is in [`docs/ui.md`](docs/ui.md).
-
-For **Forward meeting**, the production GUI treats native forwarding as a capability of the selected Calendar event: enable the action only when Classic Outlook reports the built-in Forward command as available and all identity/safety checks pass. Unsupported events fail closed with a clear explanation. The retained-request diagnostic path is not exposed as a separate user-facing action.
+This foundation is intended to be merged before the new Segment A calendar/report work begins. Forward/reconciliation testing is no longer a merge gate for this PR.
 
 ## Update the current test app
 
-During development, use the updater instead of manually opening GitHub Actions and replacing extracted artifacts. The easiest entry point on Windows is:
+Clone the repository and use:
 
 ```text
 scripts\Update-OutlookAlignerTestApp.cmd
 ```
 
-or from an existing PowerShell window:
+or from PowerShell:
 
 ```powershell
 ./scripts/Update-OutlookAlignerTestApp.ps1
 ```
 
-Administrator rights are **not required**. If GitHub CLI (`gh`) is not installed system-wide, the updater downloads the official portable Windows GitHub CLI ZIP into `%LOCALAPPDATA%\OutlookAligner\Tools\GitHubCLI\gh.exe` and uses that private user copy without modifying machine-wide PATH. On first use, GitHub authentication opens in the browser once; later runs reuse the current-user login.
+Administrator rights are **not required**. If GitHub CLI is not installed, the updater downloads the official portable Windows `gh.exe` into:
 
-The updater finds the latest **successful push CI** build from `phase-3/ui-assisted-testing`, downloads `OutlookAligner-Phase3-UI-TestHarness-win-x64`, verifies that the UI and OutlookHost executables are present, and installs it under `%LOCALAPPDATA%\OutlookAligner\TestApp`. The previous build is retained as `%LOCALAPPDATA%\OutlookAligner\TestApp.previous`, and the updated app launches automatically.
-
-Useful options:
-
-```powershell
-# Update without launching.
-./scripts/Update-OutlookAlignerTestApp.ps1 -NoLaunch
-
-# Redownload even if the latest CI run is already installed.
-./scripts/Update-OutlookAlignerTestApp.ps1 -Force
-
-# Also remove downloaded-file zone markers from the verified artifact files.
-./scripts/Update-OutlookAlignerTestApp.ps1 -UnblockFiles
+```text
+%LOCALAPPDATA%\OutlookAligner\Tools\GitHubCLI\gh.exe
 ```
 
-The persistent diagnostics log is stored separately under `%LOCALAPPDATA%\OutlookAligner\events.jsonl`, so updating the test app does not erase test history.
+The updater then:
+
+1. finds the latest successful CI build for the configured branch;
+2. downloads `OutlookAligner-Phase3-UI-TestHarness-win-x64`;
+3. verifies the UI and OutlookHost executables exist;
+4. keeps the previous local build as `TestApp.previous`;
+5. installs the new build under `%LOCALAPPDATA%\OutlookAligner\TestApp`;
+6. unblocks/signs Outlook Aligner binaries when a trusted local test certificate is available;
+7. verifies Authenticode signatures are `Valid` before launch;
+8. launches the app unless `-NoLaunch` is supplied.
+
+### Local test signing
+
+The updater looks for a current-user code-signing certificate with subject:
+
+```text
+CN=Outlook Aligner Local Test
+```
+
+It **does not create or trust a root certificate automatically**. Trust setup is intentionally a separate one-time user/admin-policy decision, especially on managed work computers.
+
+Once such a certificate already exists in `Cert:\CurrentUser\My` with its public certificate trusted in the current user's Root and TrustedPublisher stores, normal updater runs sign these local test files automatically:
+
+- `OutlookAligner.*.exe`
+- `OutlookAligner.*.dll`
+
+Useful updater options:
+
+```powershell
+# Update but do not launch.
+./scripts/Update-OutlookAlignerTestApp.ps1 -NoLaunch
+
+# Force a fresh download of the current successful build.
+./scripts/Update-OutlookAlignerTestApp.ps1 -Force
+
+# Remove downloaded-file zone markers from all files in the installed bundle.
+./scripts/Update-OutlookAlignerTestApp.ps1 -UnblockFiles
+
+# Intentionally skip local Authenticode signing.
+./scripts/Update-OutlookAlignerTestApp.ps1 -SkipLocalSigning
+
+# Select a specific local signing certificate if multiple matching certs exist.
+./scripts/Update-OutlookAlignerTestApp.ps1 -SigningCertificateThumbprint "<thumbprint>"
+```
+
+The persistent diagnostics log lives separately at:
+
+```text
+%LOCALAPPDATA%\OutlookAligner\events.jsonl
+```
+
+so replacing the test app does not erase test history.
 
 ## Verified toolchain baseline
 
-- .NET SDK 10.0.400 / .NET 10.0.11 / C# 14
+- .NET SDK 10.0.400 / .NET 10 / C# 14
 - Windows App SDK 2.4.0 / WinUI 3
-- WebView2 1.0.4191.47
-- Outlook Interop 15.0.4797.1004
-- Node.js 24.20.0 LTS / npm 11.19.0
-- TypeScript 7.0.2 / Vite 8.2.2 / FullCalendar 7.1.0
-- xUnit v3 4.0.0 on Microsoft Testing Platform with CodeCoverage 18.11.0
-- BenchmarkDotNet 0.15.8
+- WebView2
+- Outlook Interop
+- Node.js 24 / npm
+- TypeScript / Vite / FullCalendar
+- xUnit v3 on Microsoft Testing Platform
+- BenchmarkDotNet
 - GitHub Actions + Dependabot
 
-## Local verification
-
-Prerequisites:
-
-- .NET SDK 10.0.400
-- Node.js 24 LTS
-- PowerShell 7 recommended
-
-Run:
+## Local repository verification
 
 ```powershell
 ./scripts/verify.ps1
@@ -120,9 +138,9 @@ Classic Outlook is required for live COM/manual acceptance testing, not for norm
 
 ## Documentation
 
-- [`plan.md`](plan.md) — product, architecture, safety rules, phases, and acceptance criteria.
-- [`docs/ui.md`](docs/ui.md) — production GUI/interaction contract and current implementation boundary.
-- [`docs/phase-0.md`](docs/phase-0.md) — completed bootstrap and verified stable-version matrix.
-- [`docs/phase-1.md`](docs/phase-1.md) — completed read-only Outlook probe and packaging lessons.
-- [`docs/phase-2.md`](docs/phase-2.md) — completed native meeting-forwarding spike and real-machine evidence.
-- [`docs/phase-3.md`](docs/phase-3.md) — current UI-assisted development/read-alignment increment.
+- [`plan.md`](plan.md) — Segment A/Segment B roadmap, architecture, safety rules and acceptance gates.
+- [`docs/ui.md`](docs/ui.md) — read-only-first production UI contract.
+- [`docs/phase-0.md`](docs/phase-0.md) — repository/toolchain bootstrap history.
+- [`docs/phase-1.md`](docs/phase-1.md) — Classic Outlook read-boundary proof.
+- [`docs/phase-2.md`](docs/phase-2.md) — native Forward technical proof.
+- [`docs/phase-3.md`](docs/phase-3.md) — current WinUI/read-alignment foundation history.
