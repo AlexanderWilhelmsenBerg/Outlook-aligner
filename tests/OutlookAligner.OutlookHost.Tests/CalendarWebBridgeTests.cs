@@ -1,6 +1,7 @@
 using OutlookAligner.App.Presentation;
 using OutlookAligner.App.ViewModels;
 using OutlookAligner.Outlook.Contracts;
+using Xunit;
 
 namespace OutlookAligner.OutlookHost.Tests;
 
