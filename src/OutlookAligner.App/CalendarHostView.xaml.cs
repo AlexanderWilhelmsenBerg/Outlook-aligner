@@ -18,7 +18,7 @@ public sealed partial class CalendarHostView : UserControl, IDisposable
     private bool _disposed;
     private bool _webReady;
 
-    public CalendarHostView(MainViewModel viewModel, AppEventLog eventLog)
+    internal CalendarHostView(MainViewModel viewModel, AppEventLog eventLog)
     {
         InitializeComponent();
         _viewModel = viewModel;
