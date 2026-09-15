@@ -14,11 +14,11 @@ Planning base when this workspace was created: `main` at `e8bc60cd6e2acc1bc32e53
 
 | Slice | Planning state | Required readiness owners | Implementation state |
 | --- | --- | --- | --- |
-| A1.1 — Deterministic calendar frontend toolchain | **SLICE READY** | Agent 30 — complete | Ready for Agent 40 handoff |
+| A1.1 — Deterministic calendar frontend toolchain | **SLICE READY** | Agent 30 — complete | **Agent 40 handoff issued** |
 | A1.2 — WebView2 month-calendar host | **PARALLEL READINESS COMPLETE** | Agents 20 + 30 — complete | Blocked until A1.1 accepted/merged and revalidated |
 | A1.3 — One logical event, one calendar item | QUEUED | Agents 10 + 30 | Blocked |
 
-**Current implementation candidate:** A1.1. Agent 00 has reconciled the required architecture input and recorded `SLICE READY` in `A1.1/00-reconciliation.md`.
+**Current implementation candidate:** A1.1. The accepted reconciliation is immutable planning commit `e518fa85b771e69f6be2f8d9d4ff05ef685b3fab`; the Agent-40 handoff is in `A1.1/40-implementation-prompt.md`.
 
 **Current parallel planning candidate:** A1.2. Both specialist notes are present with `UX READY` / `ARCH READY`. They remain provisional until A1.1 is accepted/merged; Agent 00 must then refresh `main`, inspect the merged A1.1 diff, and revalidate or refresh the A1.2 notes before final reconciliation.
 
