@@ -20,17 +20,18 @@ if (!calendarElement) {
   throw new Error("Calendar host element was not found.");
 }
 
+type WebViewMessageListener = (event: MessageEvent<unknown>) => void;
+
 type WebViewBridge = {
-  addEventListener(
-    type: "message",
-    listener: (event: MessageEvent<unknown>) => void,
-  ): void;
+  addEventListener(type: "message", listener: WebViewMessageListener): void;
   postMessage(message: string): void;
 };
 
-const webview = (
-  window as Window & { chrome?: { webview?: WebViewBridge } }
-).chrome?.webview;
+type WebViewWindow = Window & {
+  chrome?: { webview?: WebViewBridge };
+};
+
+const webview = (window as WebViewWindow).chrome?.webview;
 let currentObservations: CalendarObservation[] = [];
 
 const calendar = new Calendar(calendarElement, {
@@ -77,6 +78,7 @@ const adapter: CalendarAdapter = {
         },
       });
     }
+
     const view = calendar.view;
     reportRange(view.title, view.currentStart, view.currentEnd);
   },
@@ -91,14 +93,10 @@ function reportRange(title: string, start: Date, end: Date): void {
     const observationEnd = new Date(observation.end);
     return observationStart < end && observationEnd >= start;
   }).length;
-  webview?.postMessage(
-    rangeChangedMessage(
-      title,
-      start.toISOString(),
-      end.toISOString(),
-      visibleCount,
-    ),
-  );
+  const startIso = start.toISOString();
+  const endIso = end.toISOString();
+  const message = rangeChangedMessage(title, startIso, endIso, visibleCount);
+  webview?.postMessage(message);
 }
 
 webview?.addEventListener("message", (event) => {
