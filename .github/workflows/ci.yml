@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   dotnet:
@@ -126,32 +126,24 @@ jobs:
       - uses: actions/setup-node@v7.0.0
         with:
           node-version: "24.20.0"
-      - name: Generate A1.1 lockfile evidence
+      - name: Verify Node and npm baseline
         shell: bash
         run: |
           set -euo pipefail
-          echo "NODE_VERSION=$(node --version)"
-          echo "NPM_VERSION=$(npm --version)"
+          echo "Node $(node --version)"
+          echo "npm $(npm --version)"
           test "$(node --version)" = "v24.20.0"
           test "$(npm --version)" = "11.19.0"
-          npm install --package-lock-only --ignore-scripts
-      - name: Persist generated lockfile to implementation branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify repeatable clean install
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --heads origin "$HEAD_BRANCH" >/dev/null; then
-            encoded="$(base64 -w0 package-lock.json)"
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/web/calendar/package-lock.json" \
-              -f message='chore(frontend): add deterministic package lock' \
-              -f content="$encoded" \
-              -f branch="$HEAD_BRANCH"
-          fi
-      - name: Install dependencies
-        run: npm install --ignore-scripts
+          git diff --exit-code -- package.json package-lock.json
+          rm -rf node_modules
+          npm ci --ignore-scripts
+          git diff --exit-code -- package.json package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
