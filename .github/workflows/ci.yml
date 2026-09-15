@@ -125,9 +125,25 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.0.0
         with:
-          node-version: "24"
+          node-version: "24.20.0"
+      - name: Verify Node and npm baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Node $(node --version)"
+          echo "npm $(npm --version)"
+          test "$(node --version)" = "v24.20.0"
+          test "$(npm --version)" = "11.19.0"
       - name: Install dependencies
-        run: npm install --ignore-scripts
+        run: npm ci --ignore-scripts
+      - name: Verify repeatable clean install
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- package.json package-lock.json
+          rm -rf node_modules
+          npm ci --ignore-scripts
+          git diff --exit-code -- package.json package-lock.json
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -138,3 +154,23 @@ jobs:
         run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  verify-script:
+    name: Repository verification script
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24.20.0"
+      - name: Verify Node and npm baseline
+        shell: pwsh
+        run: |
+          if ((node --version) -ne "v24.20.0") { throw "Unexpected Node version: $(node --version)" }
+          if ((npm --version) -ne "11.19.0") { throw "Unexpected npm version: $(npm --version)" }
+      - name: Run repository verification
+        shell: pwsh
+        run: .\scripts\verify.ps1
