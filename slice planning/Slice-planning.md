@@ -8,7 +8,7 @@ Planning PRs are separate from implementation PRs. Planning may run one slice ah
 
 Planning branch: `planning/a1.2-a1.3`
 
-Planning PR: **pending creation**
+Planning PR: **#11 — Coordinate A1.2 implementation and A1.3 readiness**
 
 Current authoritative `main`: `7dbd437c1ee86bf6e41d8ad939a54cc81ee7255e`.
 
@@ -19,10 +19,10 @@ A1.1 was accepted post-merge by Agent 50. Its implementation is therefore the co
 | Slice | Planning state | Required readiness owners | Implementation state |
 | --- | --- | --- | --- |
 | A1.1 — Deterministic calendar frontend toolchain | COMPLETE / ACCEPTED | Agent 30 + Agent 50 | Merged in `7dbd437c1ee86bf6e41d8ad939a54cc81ee7255e` |
-| A1.2 — WebView2 month-calendar host | **SLICE READY** | Agents 20 + 30 — complete and revalidated | Agent 40 handoff next |
+| A1.2 — WebView2 month-calendar host | **SLICE READY** | Agents 20 + 30 — complete and revalidated | Agent 40 handoff issued |
 | A1.3 — One logical event, one calendar item | **PARALLEL READINESS ALLOWED** | Agents 10 + 30 | Blocked until A1.2 accepted/merged |
 
-**Current implementation candidate:** A1.2.
+**Current implementation candidate:** A1.2. The accepted reconciliation is immutable planning commit `1666f425a732f2fba2f7ffe55fcdbd285ebecfbd`; the Agent-40 handoff is in `A1.2/40-implementation-prompt.md`.
 
 **Current parallel planning candidate:** A1.3. Agents 10 and 30 may prepare A1.3 readiness while Agent 40 implements A1.2. Agent 00 must refresh `main` after A1.2 acceptance/merge and revalidate those notes before issuing A1.3 `SLICE READY`.
 
