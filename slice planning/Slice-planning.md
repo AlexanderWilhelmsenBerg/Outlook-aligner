@@ -14,13 +14,13 @@ Planning base when this workspace was created: `main` at `e8bc60cd6e2acc1bc32e53
 
 | Slice | Planning state | Required readiness owners | Implementation state |
 | --- | --- | --- | --- |
-| A1.1 — Deterministic calendar frontend toolchain | READINESS | Agent 30 | Not started |
-| A1.2 — WebView2 month-calendar host | PARALLEL READINESS ALLOWED | Agents 20 + 30 | Blocked until A1.1 accepted/merged |
+| A1.1 — Deterministic calendar frontend toolchain | **SLICE READY** | Agent 30 — complete | Ready for Agent 40 handoff |
+| A1.2 — WebView2 month-calendar host | **PARALLEL READINESS COMPLETE** | Agents 20 + 30 — complete | Blocked until A1.1 accepted/merged and revalidated |
 | A1.3 — One logical event, one calendar item | QUEUED | Agents 10 + 30 | Blocked |
 
-**Current implementation candidate:** A1.1.
+**Current implementation candidate:** A1.1. Agent 00 has reconciled the required architecture input and recorded `SLICE READY` in `A1.1/00-reconciliation.md`.
 
-**Current parallel planning candidate:** A1.2. Specialists may prepare A1.2 notes while A1.1 is being implemented. Agent 00 must refresh `main` after A1.1 is accepted/merged and revalidate those notes before issuing A1.2 `SLICE READY`.
+**Current parallel planning candidate:** A1.2. Both specialist notes are present with `UX READY` / `ARCH READY`. They remain provisional until A1.1 is accepted/merged; Agent 00 must then refresh `main`, inspect the merged A1.1 diff, and revalidate or refresh the A1.2 notes before final reconciliation.
 
 ## Communication protocol
 
