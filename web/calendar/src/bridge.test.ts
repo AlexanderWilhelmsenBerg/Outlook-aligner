@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyHostMessage, parseHostMessage, selectedMessage, type CalendarAdapter, type CalendarObservation } from "./bridge.ts";
+import {
+  applyHostMessage,
+  parseHostMessage,
+  selectedMessage,
+  type CalendarAdapter,
+  type CalendarObservation,
+} from "./bridge.ts";
 
 const observation: CalendarObservation = {
   presentationId: "opaque-1",
@@ -16,7 +22,13 @@ const observation: CalendarObservation = {
 test("render payload replaces synthetic observations", () => {
   let rendered: CalendarObservation[] = [];
   const adapter = fakeAdapter({ replace: (value) => (rendered = value) });
-  const message = parseHostMessage(JSON.stringify({ version: 1, type: "renderObservations", observations: [observation] }));
+  const message = parseHostMessage(
+    JSON.stringify({
+      version: 1,
+      type: "renderObservations",
+      observations: [observation],
+    }),
+  );
   assert.ok(message);
   applyHostMessage(message, adapter);
   assert.deepEqual(rendered, [observation]);
@@ -26,7 +38,9 @@ test("navigation commands use the calendar adapter", () => {
   const calls: string[] = [];
   const adapter = fakeAdapter({ navigation: (value) => calls.push(value) });
   for (const action of ["today", "previous", "next"] as const) {
-    const message = parseHostMessage(JSON.stringify({ version: 1, type: "navigate", action }));
+    const message = parseHostMessage(
+      JSON.stringify({ version: 1, type: "navigate", action }),
+    );
     assert.ok(message);
     applyHostMessage(message, adapter);
   }
@@ -35,8 +49,14 @@ test("navigation commands use the calendar adapter", () => {
 
 test("invalid host messages fail closed", () => {
   assert.equal(parseHostMessage("not-json"), null);
-  assert.equal(parseHostMessage({ version: 2, type: "navigate", action: "next" }), null);
-  assert.equal(parseHostMessage({ version: 1, type: "navigate", action: "sideways" }), null);
+  assert.equal(
+    parseHostMessage({ version: 2, type: "navigate", action: "next" }),
+    null,
+  );
+  assert.equal(
+    parseHostMessage({ version: 1, type: "navigate", action: "sideways" }),
+    null,
+  );
 });
 
 test("selection message contains only protocol data and opaque id", () => {

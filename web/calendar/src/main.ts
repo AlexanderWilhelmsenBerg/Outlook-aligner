@@ -21,11 +21,16 @@ if (!calendarElement) {
 }
 
 type WebViewBridge = {
-  addEventListener(type: "message", listener: (event: MessageEvent<unknown>) => void): void;
+  addEventListener(
+    type: "message",
+    listener: (event: MessageEvent<unknown>) => void,
+  ): void;
   postMessage(message: string): void;
 };
 
-const webview = (window as Window & { chrome?: { webview?: WebViewBridge } }).chrome?.webview;
+const webview = (
+  window as Window & { chrome?: { webview?: WebViewBridge } }
+).chrome?.webview;
 let currentObservations: CalendarObservation[] = [];
 
 const calendar = new Calendar(calendarElement, {
@@ -86,7 +91,14 @@ function reportRange(title: string, start: Date, end: Date): void {
     const observationEnd = new Date(observation.end);
     return observationStart < end && observationEnd >= start;
   }).length;
-  webview?.postMessage(rangeChangedMessage(title, start.toISOString(), end.toISOString(), visibleCount));
+  webview?.postMessage(
+    rangeChangedMessage(
+      title,
+      start.toISOString(),
+      end.toISOString(),
+      visibleCount,
+    ),
+  );
 }
 
 webview?.addEventListener("message", (event) => {

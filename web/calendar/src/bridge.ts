@@ -12,7 +12,11 @@ export interface CalendarObservation {
 }
 
 export type HostMessage =
-  | { version: 1; type: "renderObservations"; observations: CalendarObservation[] }
+  | {
+      version: 1;
+      type: "renderObservations";
+      observations: CalendarObservation[];
+    }
   | { version: 1; type: "navigate"; action: "today" | "previous" | "next" };
 
 export interface CalendarAdapter {
@@ -32,25 +36,44 @@ export function parseHostMessage(raw: unknown): HostMessage | null {
     }
   }
 
-  if (!isRecord(value) || value.version !== protocolVersion || typeof value.type !== "string") {
+  if (
+    !isRecord(value) ||
+    value.version !== protocolVersion ||
+    typeof value.type !== "string"
+  ) {
     return null;
   }
 
   if (value.type === "renderObservations") {
-    if (!Array.isArray(value.observations) || !value.observations.every(isObservation)) {
+    if (
+      !Array.isArray(value.observations) ||
+      !value.observations.every(isObservation)
+    ) {
       return null;
     }
-    return { version: 1, type: "renderObservations", observations: value.observations };
+    return {
+      version: 1,
+      type: "renderObservations",
+      observations: value.observations,
+    };
   }
 
-  if (value.type === "navigate" && (value.action === "today" || value.action === "previous" || value.action === "next")) {
+  if (
+    value.type === "navigate" &&
+    (value.action === "today" ||
+      value.action === "previous" ||
+      value.action === "next")
+  ) {
     return { version: 1, type: "navigate", action: value.action };
   }
 
   return null;
 }
 
-export function applyHostMessage(message: HostMessage, calendar: CalendarAdapter): void {
+export function applyHostMessage(
+  message: HostMessage,
+  calendar: CalendarAdapter,
+): void {
   if (message.type === "renderObservations") {
     calendar.replaceObservations(message.observations);
     return;
@@ -74,11 +97,27 @@ export function readyMessage(): string {
 }
 
 export function selectedMessage(presentationId: string): string {
-  return JSON.stringify({ version: protocolVersion, type: "observationSelected", presentationId });
+  return JSON.stringify({
+    version: protocolVersion,
+    type: "observationSelected",
+    presentationId,
+  });
 }
 
-export function rangeChangedMessage(title: string, start: string, end: string, visibleCount: number): string {
-  return JSON.stringify({ version: protocolVersion, type: "rangeChanged", title, start, end, visibleCount });
+export function rangeChangedMessage(
+  title: string,
+  start: string,
+  end: string,
+  visibleCount: number,
+): string {
+  return JSON.stringify({
+    version: protocolVersion,
+    type: "rangeChanged",
+    title,
+    start,
+    end,
+    visibleCount,
+  });
 }
 
 function isObservation(value: unknown): value is CalendarObservation {
