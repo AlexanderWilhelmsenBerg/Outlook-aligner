@@ -8,6 +8,8 @@ The planning PR is deliberately separate from implementation PRs. It may remain 
 
 Planning branch: `planning/segment-a-slices`
 
+Planning PR: **#9 — Coordinate Segment A slice planning**
+
 Planning base when this workspace was created: `main` at `e8bc60cd6e2acc1bc32e538d661db88262198226`.
 
 | Slice | Planning state | Required readiness owners | Implementation state |
