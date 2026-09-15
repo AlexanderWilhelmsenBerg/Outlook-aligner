@@ -14,6 +14,7 @@ public sealed partial class MainWindow : Window
     private readonly AppEventLog _eventLog = AppEventLog.Current;
     private AppLogLevel? _selectedLogLevel;
     private bool _initialRefreshStarted;
+    private CalendarHostView? _calendarHostView;
     private string? _lastNoticeLogged;
     private string? _lastStatusLogged;
 
@@ -27,6 +28,7 @@ public sealed partial class MainWindow : Window
         RebuildVisibleLogEntries();
         _eventLog.EntryAdded += OnLogEntryAdded;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        InstallCalendarHost();
         Closed += OnClosed;
         _eventLog.Info("Application", "WinUI session started.");
     }
@@ -45,6 +47,34 @@ public sealed partial class MainWindow : Window
     ];
 
     public string LogFilePathDisplay => $"Persistent log: {_eventLog.FilePath}";
+
+    private void InstallCalendarHost()
+    {
+        var legacyContent = CalendarPanel.Children
+            .OfType<FrameworkElement>()
+            .FirstOrDefault(element => Grid.GetRow(element) == 2);
+        if (legacyContent is not null)
+        {
+            legacyContent.Visibility = Visibility.Collapsed;
+        }
+
+        var header = CalendarPanel.Children
+            .OfType<Grid>()
+            .FirstOrDefault(element => Grid.GetRow(element) == 0);
+        var subtitle = header?.Children
+            .OfType<StackPanel>()
+            .SelectMany(panel => panel.Children.OfType<TextBlock>())
+            .Skip(1)
+            .FirstOrDefault();
+        if (subtitle is not null)
+        {
+            subtitle.Text = "Read-only calendar observations from the current Outlook scan.";
+        }
+
+        _calendarHostView = new CalendarHostView(ViewModel, _eventLog);
+        Grid.SetRow(_calendarHostView, 2);
+        CalendarPanel.Children.Add(_calendarHostView);
+    }
 
     private void OnRootLoaded(object sender, RoutedEventArgs e)
     {
@@ -219,6 +249,7 @@ public sealed partial class MainWindow : Window
         _ = sender;
         _ = args;
         _eventLog.Info("Application", "WinUI session closed.");
+        _calendarHostView?.Detach();
         _eventLog.EntryAdded -= OnLogEntryAdded;
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         Closed -= OnClosed;

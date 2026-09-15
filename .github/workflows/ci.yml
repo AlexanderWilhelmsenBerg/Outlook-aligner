@@ -18,6 +18,14 @@ jobs:
       - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: 10.0.400
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24.20.0"
+      - name: Verify Node and npm baseline for publish
+        shell: pwsh
+        run: |
+          if ((node --version) -ne "v24.20.0") { throw "Unexpected Node version: $(node --version)" }
+          if ((npm --version) -ne "11.19.0") { throw "Unexpected npm version: $(npm --version)" }
       - name: Restore
         run: dotnet restore OutlookAligner.sln
       - name: Verify formatting
@@ -76,6 +84,8 @@ jobs:
           Copy-Item .\artifacts\outlook-host\OutlookAligner.OutlookHost.exe .\artifacts\app\OutlookAligner.OutlookHost.exe -Force
           if (-not (Test-Path .\artifacts\app\OutlookAligner.App.exe)) { throw "WinUI app executable missing" }
           if (-not (Test-Path .\artifacts\app\OutlookAligner.OutlookHost.exe)) { throw "OutlookHost executable missing from UI bundle" }
+          if (-not (Test-Path .\artifacts\app\CalendarWeb\index.html)) { throw "CalendarWeb index.html missing from UI bundle" }
+          if (-not (Get-ChildItem .\artifacts\app\CalendarWeb\assets -File -ErrorAction SilentlyContinue)) { throw "CalendarWeb assets missing from UI bundle" }
       - name: Smoke test WinUI startup
         shell: pwsh
         run: |
@@ -144,6 +154,8 @@ jobs:
           rm -rf node_modules
           npm ci --ignore-scripts
           git diff --exit-code -- package.json package-lock.json
+      - name: Test message bridge
+        run: npm run test
       - name: Typecheck
         run: npm run typecheck
       - name: Lint

@@ -6,6 +6,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/OutlookAligner.App/OutlookAligner.App.csproj" />
     <ProjectReference Include="../../src/OutlookAligner.Outlook.Contracts/OutlookAligner.Outlook.Contracts.csproj" />
     <ProjectReference Include="../../src/OutlookAligner.OutlookHost/OutlookAligner.OutlookHost.csproj" />
   </ItemGroup>
