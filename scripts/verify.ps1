@@ -23,6 +23,7 @@ try {
     Push-Location "web/calendar"
     try {
         Invoke-Checked { npm ci --ignore-scripts }
+        Invoke-Checked { npm run test }
         Invoke-Checked { npm run typecheck }
         Invoke-Checked { npm run lint }
         Invoke-Checked { npm run format:check }

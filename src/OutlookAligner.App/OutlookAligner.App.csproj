@@ -24,4 +24,25 @@
     <PackageReference Include="Serilog.Settings.Configuration" />
     <PackageReference Include="Serilog.Sinks.File" />
   </ItemGroup>
+  <Target Name="BuildCalendarWebForPublish" BeforeTargets="Publish">
+    <PropertyGroup>
+      <CalendarWebRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\web\calendar'))</CalendarWebRoot>
+      <CalendarWebDist>$(CalendarWebRoot)\dist</CalendarWebDist>
+    </PropertyGroup>
+    <Exec Command="npm ci --ignore-scripts" WorkingDirectory="$(CalendarWebRoot)" />
+    <Exec Command="npm run build" WorkingDirectory="$(CalendarWebRoot)" />
+    <Error Condition="!Exists('$(CalendarWebDist)\index.html')" Text="Calendar frontend build did not produce dist/index.html." />
+  </Target>
+  <Target Name="CopyCalendarWebToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_CalendarWebAsset Include="$(CalendarWebDist)\**\*" />
+    </ItemGroup>
+    <Error Condition="'@(_CalendarWebAsset)' == ''" Text="Calendar frontend publish payload is missing." />
+    <MakeDir Directories="$(PublishDir)CalendarWeb" />
+    <Copy
+      SourceFiles="@(_CalendarWebAsset)"
+      DestinationFiles="@(_CalendarWebAsset->'$(PublishDir)CalendarWeb\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+    <Error Condition="!Exists('$(PublishDir)CalendarWeb\index.html')" Text="Published calendar payload is missing CalendarWeb/index.html." />
+  </Target>
 </Project>
