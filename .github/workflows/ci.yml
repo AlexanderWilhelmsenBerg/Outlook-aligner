@@ -139,6 +139,13 @@ jobs:
           base64 -w0 package-lock.json
           echo
           echo "A11_LOCKFILE_BASE64_END"
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: a1.1-package-lock
+          path: web/calendar/package-lock.json
+          if-no-files-found: error
+          retention-days: 1
       - name: Install dependencies
         run: npm install --ignore-scripts
       - name: Typecheck
