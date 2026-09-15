@@ -154,3 +154,23 @@ jobs:
         run: npm run build
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  verify-script:
+    name: Repository verification script
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: 10.0.400
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24.20.0"
+      - name: Verify Node and npm baseline
+        shell: pwsh
+        run: |
+          if ((node --version) -ne "v24.20.0") { throw "Unexpected Node version: $(node --version)" }
+          if ((npm --version) -ne "11.19.0") { throw "Unexpected npm version: $(npm --version)" }
+      - name: Run repository verification
+        shell: pwsh
+        run: .\scripts\verify.ps1
