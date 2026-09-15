@@ -249,7 +249,7 @@ public sealed partial class MainWindow : Window
         _ = sender;
         _ = args;
         _eventLog.Info("Application", "WinUI session closed.");
-        _calendarHostView?.Dispose();
+        _calendarHostView?.Detach();
         _eventLog.EntryAdded -= OnLogEntryAdded;
         ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         Closed -= OnClosed;
