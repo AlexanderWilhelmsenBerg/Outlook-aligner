@@ -45,7 +45,7 @@ internal static class OutlookCalendarReader
                     {
                         try
                         {
-                            events.Add(ToDto(appointment, includeDetails));
+                            events.Add(ToDto(appointment, includeDetails, warnings));
                         }
                         catch (COMException exception)
                         {
@@ -72,7 +72,10 @@ internal static class OutlookCalendarReader
         return events;
     }
 
-    private static CalendarEventDto ToDto(OutlookInterop.AppointmentItem appointment, bool includeDetails)
+    private static CalendarEventDto ToDto(
+        OutlookInterop.AppointmentItem appointment,
+        bool includeDetails,
+        ICollection<string> warnings)
         => new(
             appointment.EntryID,
             appointment.GlobalAppointmentID,
@@ -81,8 +84,10 @@ internal static class OutlookCalendarReader
             appointment.AllDayEvent,
             appointment.IsRecurring,
             appointment.RecurrenceState.ToString(),
+            appointment.MeetingStatus.ToString(),
             appointment.BusyStatus.ToString(),
             appointment.Sensitivity.ToString(),
             includeDetails ? appointment.Subject : null,
-            includeDetails ? appointment.Location : null);
+            includeDetails ? appointment.Location : null,
+            ManagedCopyMetadataReader.Read(appointment, warnings));
 }
