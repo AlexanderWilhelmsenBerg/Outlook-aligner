@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   dotnet:
@@ -135,17 +135,21 @@ jobs:
           test "$(node --version)" = "v24.20.0"
           test "$(npm --version)" = "11.19.0"
           npm install --package-lock-only --ignore-scripts
-          echo "A11_LOCKFILE_BASE64_BEGIN"
-          base64 -w0 package-lock.json
-          echo
-          echo "A11_LOCKFILE_BASE64_END"
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: a1.1-package-lock
-          path: web/calendar/package-lock.json
-          if-no-files-found: error
-          retention-days: 1
+      - name: Persist generated lockfile to implementation branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "$HEAD_BRANCH" >/dev/null; then
+            encoded="$(base64 -w0 package-lock.json)"
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/web/calendar/package-lock.json" \
+              -f message='chore(frontend): add deterministic package lock' \
+              -f content="$encoded" \
+              -f branch="$HEAD_BRANCH"
+          fi
       - name: Install dependencies
         run: npm install --ignore-scripts
       - name: Typecheck
