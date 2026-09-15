@@ -8,14 +8,14 @@ using OutlookAligner.App.ViewModels;
 
 namespace OutlookAligner.App;
 
-public sealed partial class CalendarHostView : UserControl, IDisposable
+public sealed partial class CalendarHostView : UserControl
 {
     private const string CalendarVirtualHost = "calendar.outlook-aligner.local";
 
     private readonly AppEventLog _eventLog;
     private readonly CalendarPresentationSession _presentationSession = new();
     private readonly MainViewModel _viewModel;
-    private bool _disposed;
+    private bool _detached;
     private bool _webReady;
 
     internal CalendarHostView(MainViewModel viewModel, AppEventLog eventLog)
@@ -28,14 +28,14 @@ public sealed partial class CalendarHostView : UserControl, IDisposable
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
-    public void Dispose()
+    internal void Detach()
     {
-        if (_disposed)
+        if (_detached)
         {
             return;
         }
 
-        _disposed = true;
+        _detached = true;
         Loaded -= OnLoaded;
         _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         if (CalendarWebView.CoreWebView2 is not null)
