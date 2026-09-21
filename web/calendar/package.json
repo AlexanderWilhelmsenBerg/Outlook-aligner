@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "fullcalendar": "7.1.0",
-    "temporal-polyfill": "1.0.4"
+    "temporal-polyfill": "1.0.5"
   },
   "devDependencies": {
     "eslint": "10.10.0",
