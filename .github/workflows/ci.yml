@@ -108,7 +108,7 @@ jobs:
 
           Stop-Process -Id $process.Id -Force
       - name: Upload Phase 3 UI test harness
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: OutlookAligner-Phase3-UI-TestHarness-win-x64
           path: artifacts/app/**
